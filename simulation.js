@@ -707,11 +707,29 @@ export function getTeamSnapshot(state, teamNumber) {
 
 export function getDashboardMetrics(state) {
   const safeState = sanitizeState(state);
+  const workingCrews = TRADES.filter((trade) => {
+    const candidate = Object.values(safeState.tasks).find((task) =>
+      task.team === trade.team && isEligible(safeState, task) && task.done > 0 && task.done < task.required
+    );
+    return Boolean(candidate) && safeState.running;
+  }).length;
+
+  const blockedCrews = TRADES.filter((trade) => {
+    const remainingTasks = Object.values(safeState.tasks).filter((task) =>
+      task.team === trade.team && task.done < task.required
+    );
+    if (!remainingTasks.length) {
+      return false;
+    }
+    const eligibleTask = remainingTasks.find((task) => isEligible(safeState, task));
+    return !eligibleTask;
+  }).length;
+
   return {
     overallProgressPct: Math.round(overallProgress(safeState) * 100),
     tick: safeState.tick,
-    workingCrews: Object.values(safeState.teams).filter((team) => team.status === STATUS.WORKING).length,
-    blockedCrews: Object.values(safeState.teams).filter((team) => team.status === STATUS.BLOCKED).length,
+    workingCrews,
+    blockedCrews,
     completedTasks: getCompletedTasksCount(safeState),
     activeFloor: getActiveFloor(safeState)
   };

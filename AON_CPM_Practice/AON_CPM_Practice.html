@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>AON / CPM Practice Tool</title>
+<style>
+/* ── Reset ──────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#eef2f7;color:#2d3748;min-height:100vh;}
+
+/* ── Header ─────────────────────────────────────── */
+.hdr{background:linear-gradient(135deg,#1e3a5f 0%,#2563a8 100%);color:white;padding:12px 16px;
+     display:flex;align-items:center;justify-content:space-between;gap:12px;
+     box-shadow:0 2px 8px rgba(0,0,0,0.25);}
+.hdr-t h1{font-size:clamp(0.9rem,3vw,1.15rem);font-weight:700;}
+.hdr-t p{font-size:0.7rem;opacity:.72;margin-top:2px;}
+.btn-new{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.45);
+         color:white;padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:700;
+         font-size:0.8rem;white-space:nowrap;flex-shrink:0;}
+.btn-new:hover{background:rgba(255,255,255,.28);}
+
+/* ── Main ───────────────────────────────────────── */
+.main{padding:10px 12px;max-width:1400px;margin:0 auto;}
+
+/* ── Steps ──────────────────────────────────────── */
+.steps{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;
+       -webkit-overflow-scrolling:touch;}
+.step{flex:0 0 auto;display:flex;align-items:flex-start;gap:7px;background:white;
+      border-radius:8px;padding:8px 11px;box-shadow:0 1px 3px rgba(0,0,0,.07);
+      font-size:0.75rem;color:#4a5568;line-height:1.35;min-width:140px;max-width:180px;}
+.sn{min-width:19px;height:19px;background:#2563a8;color:white;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;}
+@media(max-width:680px){
+  .steps{flex-direction:column;overflow-x:visible;padding-bottom:0;}
+  .step{max-width:none;min-width:0;flex:none;}
+}
+
+/* ── Two-column layout ──────────────────────────── */
+.layout{display:flex;gap:10px;align-items:flex-start;}
+.lc{display:flex;flex-direction:column;gap:10px;width:236px;flex-shrink:0;}
+.rc{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0;overflow:hidden;}
+@media(max-width:680px){
+  .layout{flex-direction:column;align-items:stretch;}
+  .rc{width:100%;}
+  .lc{width:100%;}
+}
+
+/* ── Card ───────────────────────────────────────── */
+.card{background:white;border-radius:10px;padding:12px 14px;
+      box-shadow:0 1px 4px rgba(0,0,0,.08);min-width:0;}
+.ch{font-size:0.67rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;
+    padding-bottom:8px;border-bottom:1px solid #f1f5f9;margin-bottom:10px;
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.ch-note{font-weight:400;text-transform:none;letter-spacing:0;color:#cbd5e1;font-size:0.65rem;}
+
+/* ── Activity table ─────────────────────────────── */
+.at{border-collapse:collapse;width:100%;font-size:0.8rem;}
+.at th{background:#f8fafc;padding:5px 9px;text-align:center;border:1px solid #e2e8f0;
+       font-size:0.65rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;}
+.at td{padding:5px 9px;text-align:center;border:1px solid #e2e8f0;}
+.at td:first-child{font-weight:800;font-size:0.88rem;color:#1e3a5f;}
+
+/* ── Reference card ─────────────────────────────── */
+.ref-top{display:flex;gap:10px;align-items:flex-start;}
+.ln{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;
+    width:100px;height:52px;border:2px solid #4a90d9;border-radius:4px;overflow:hidden;
+    font-size:.6rem;font-weight:700;flex-shrink:0;}
+.lnc{display:flex;align-items:center;justify-content:center;border-right:1px solid #4a90d9;}
+.lnc:nth-child(3),.lnc:nth-child(6){border-right:none;}
+.lnc:nth-child(1),.lnc:nth-child(2),.lnc:nth-child(3){border-bottom:1px solid #4a90d9;}
+.ln-es,.ln-ef{color:#1d4ed8;}.ln-ls,.ln-lf{color:#7c3aed;}.ln-tf{color:#9333ea;font-size:.55rem;}
+.ck{display:flex;flex-direction:column;gap:4px;font-size:.7rem;color:#64748b;}
+.ck-r{display:flex;align-items:center;gap:5px;}
+.ck-b{width:16px;height:10px;border-radius:2px;border:2px solid #4a90d9;flex-shrink:0;}
+details.fml summary{font-size:.7rem;font-weight:700;color:#2563a8;cursor:pointer;
+  list-style:none;display:flex;justify-content:space-between;padding:6px 0 2px;user-select:none;}
+details.fml summary::-webkit-details-marker{display:none;}
+details.fml summary::after{content:'▼';font-size:.55rem;margin-left:4px;}
+details[open].fml summary::after{content:'▲';}
+.fg{display:grid;grid-template-columns:auto 1fr;gap:2px 6px;margin-top:6px;font-size:.7rem;align-items:baseline;}
+.ft{font-weight:800;padding:1px 4px;border-radius:3px;font-size:.64rem;white-space:nowrap;}
+.ft-es,.ft-ef{background:#dbeafe;color:#1d4ed8;}
+.ft-lf,.ft-ls{background:#ede9fe;color:#7c3aed;}
+.ft-tf{background:#f3e8ff;color:#9333ea;}
+.fv{color:#4b5563;line-height:1.45;}
+.fv em{color:#94a3b8;font-style:normal;font-size:.65rem;}
+
+/* ── Show connections checkbox ───────────────────── */
+.conn-chk-lbl{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:.72rem;
+              color:#2563a8;cursor:pointer;text-transform:none;letter-spacing:0;
+              background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:6px;
+              padding:3px 9px;margin-left:auto;white-space:nowrap;}
+.conn-chk-lbl input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#2563a8;flex-shrink:0;}
+
+/* ── Network ────────────────────────────────────── */
+/* card wraps network — overflow:hidden stops it from widening the column */
+.net-card{overflow:hidden;}
+.net-outer{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;
+           width:100%;min-height:80px;}
+#net-cont{position:relative;}
+#net-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+
+/* ── CPM node ───────────────────────────────────── */
+.nd{position:absolute;border:2.5px solid #4a90d9;border-radius:6px;background:white;
+    cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.1);overflow:hidden;user-select:none;
+    transition:border-color .15s,box-shadow .15s;touch-action:manipulation;}
+.nd:hover{border-color:#1e3a5f;box-shadow:0 2px 8px rgba(30,58,95,.2);}
+.nd.cp-sel   {border-color:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.2);}
+.nd.cp-corr  {border-color:#dc2626;background:#fff5f5;}
+.nd.cp-wrong {border-color:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.3);}
+.nd.cp-missed{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.3);background:#fffbeb;}
+.nd.cf-from  {border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.25);}
+
+/* CP selection mode — disable inputs so node body gets the tap */
+.cp-mode .ni{pointer-events:none;}
+.cp-mode .nd:hover{border-color:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.2);}
+
+/* CP mode info bar */
+.cp-mode-bar{display:none;background:#fef9c3;border:1.5px solid #fbbf24;border-radius:8px;
+             padding:7px 12px;font-size:.76rem;font-weight:600;color:#713f12;margin-bottom:8px;}
+.cp-mode-bar.on{display:block;}
+
+/* node inner 3×2 grid */
+.ng{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:100%;}
+.nc{display:flex;align-items:center;justify-content:center;}
+.nc:nth-child(1),.nc:nth-child(2),.nc:nth-child(4),.nc:nth-child(5){border-right:1.5px solid #4a90d9;}
+.nc:nth-child(1),.nc:nth-child(2),.nc:nth-child(3){border-bottom:1.5px solid #4a90d9;}
+.nlb{flex-direction:column;gap:1px;pointer-events:none;}
+.nid{font-weight:800;font-size:.92rem;color:#1e3a5f;line-height:1;}
+.ndu{font-size:.6rem;color:#718096;}
+.ni{width:100%;height:100%;border:none;background:transparent;text-align:center;
+    font-size:.78rem;font-weight:700;color:#1a202c;padding:2px 1px;outline:none;cursor:text;
+    -webkit-appearance:textfield;-moz-appearance:textfield;appearance:textfield;min-height:34px;}
+.ni::-webkit-inner-spin-button,.ni::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+.ni::placeholder{color:#c3d0e0;font-weight:400;font-size:.65rem;}
+.ni:focus{background:#eff6ff;}
+.ni.ok {background:#16a34a;color:white;font-weight:800;}
+.ni.err{background:#ef4444;color:white;font-weight:800;}
+
+/* ── Critical path panel ────────────────────────── */
+.cp-panel{background:#fefce8;border:1.5px solid #fde047;border-radius:8px;
+          padding:9px 13px;font-size:.8rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.cp-lbl{font-weight:700;color:#713f12;white-space:nowrap;font-size:.78rem;}
+#cp-list{color:#92400e;font-weight:600;}
+
+/* ── Buttons ────────────────────────────────────── */
+.ctrl{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:0;}
+.btn{padding:8px 14px;border:none;border-radius:7px;cursor:pointer;font-weight:700;
+     font-size:.8rem;display:inline-flex;align-items:center;gap:5px;
+     transition:filter .15s,transform .1s;white-space:nowrap;}
+.btn:hover{filter:brightness(1.08);}
+.btn:active{transform:scale(.97);}
+.btn-check{background:#1d4ed8;color:white;}
+.btn-hint {background:#fbbf24;color:#78350f;}
+.btn-sol  {background:#7c3aed;color:white;}
+.btn-rst  {background:#f1f5f9;color:#475569;border:1px solid #cbd5e0;}
+.btn-cp   {background:#fef9c3;color:#92400e;border:1.5px solid #fbbf24;}
+.btn-cp.on{background:#f59e0b;color:white;border-color:#f59e0b;}
+@media(max-width:680px){.ctrl .btn{width:100%;justify-content:center;}}
+
+/* ── Results ────────────────────────────────────── */
+.res{padding:11px 13px;border-radius:8px;border-left:4px solid;font-size:.82rem;}
+.res-ok {background:#f0fdf4;border-color:#16a34a;color:#14532d;}
+.res-mid{background:#fffbeb;border-color:#d97706;color:#78350f;}
+.res-bad{background:#fef2f2;border-color:#dc2626;color:#7f1d1d;}
+.res-sc {font-size:1rem;font-weight:800;margin-bottom:4px;}
+.res-dt {line-height:1.7;}
+
+/* ── Correction table ───────────────────────────── */
+.ct{border-collapse:collapse;font-size:.73rem;margin-top:8px;width:100%;}
+.ct th,.ct td{padding:3px 7px;text-align:center;border:1px solid #e2e8f0;white-space:nowrap;}
+.ct th{background:#f8fafc;font-weight:700;color:#64748b;font-size:.65rem;text-transform:uppercase;}
+.ct td:first-child{font-weight:700;color:#475569;background:#f8fafc;font-size:.65rem;}
+.ct-ok {background:#dcfce7;color:#14532d;font-weight:700;}
+.ct-err{background:#fee2e2;color:#7f1d1d;font-weight:600;}
+.ct-bk {background:#fef9c3;color:#713f12;font-weight:600;}
+
+/* ── SVG arrows ─────────────────────────────────── */
+.arr   {fill:none;stroke:#94a3b8;stroke-width:2;}
+.arr-cp{fill:none;stroke:#dc2626;stroke-width:2.5;}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-t">
+    <h1>AON Network &amp; CPM — Practice Tool</h1>
+    <p>Forward pass · Backward pass · Critical path · Auto-graded</p>
+  </div>
+  <button class="btn-new" onclick="newProblem()">⟳ New Problem</button>
+</header>
+
+<div class="main">
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step"><div class="sn">1</div><div>Study the <strong>activity table</strong></div></div>
+    <div class="step"><div class="sn">2</div><div><strong>Forward pass</strong> — fill <span style="color:#1d4ed8;font-weight:700;">ES</span> &amp; <span style="color:#1d4ed8;font-weight:700;">EF</span> (left→right)</div></div>
+    <div class="step"><div class="sn">3</div><div><strong>Backward pass</strong> — fill <span style="color:#7c3aed;font-weight:700;">LS</span>, <span style="color:#7c3aed;font-weight:700;">LF</span> &amp; <span style="color:#9333ea;font-weight:700;">TF</span> (right→left)</div></div>
+    <div class="step"><div class="sn">4</div><div>Use <span style="color:#92400e;font-weight:700;">🎯 Mark CP</span> then tap nodes on the critical path</div></div>
+    <div class="step"><div class="sn">5</div><div>Press <strong>Check Answers</strong> to get feedback</div></div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Left column -->
+    <div class="lc">
+
+      <div class="card">
+        <div class="ch">Activity Table</div>
+        <table class="at">
+          <thead><tr><th>Act.</th><th>Dur.</th><th>Predecessors</th></tr></thead>
+          <tbody id="act-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="ch">Reference</div>
+        <div class="ref-top">
+          <div class="ln">
+            <div class="lnc ln-es">ES</div>
+            <div class="lnc" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <span style="font-size:.72rem;font-weight:800;color:#1e3a5f;">ID</span>
+              <span style="font-size:.54rem;color:#a0aec0;">dur</span>
+            </div>
+            <div class="lnc ln-ef">EF</div>
+            <div class="lnc ln-ls">LS</div>
+            <div class="lnc ln-tf">TF</div>
+            <div class="lnc ln-lf">LF</div>
+          </div>
+          <div class="ck">
+            <div class="ck-r"><div class="ck-b"></div>Normal</div>
+            <div class="ck-r"><div class="ck-b" style="border-color:#d97706;"></div>Selected (CP)</div>
+            <div class="ck-r"><div class="ck-b" style="border-color:#dc2626;background:#fff5f5;"></div>Critical ✓</div>
+            <div class="ck-r"><div class="ck-b" style="border-color:#f59e0b;background:#fffbeb;"></div>Missed ✗</div>
+          </div>
+        </div>
+        <details class="fml">
+          <summary>Formulae</summary>
+          <div class="fg">
+            <span class="ft ft-es">ES</span>
+            <span class="fv">= max(EF of predecessors)<br><em>= 0 if no predecessors</em></span>
+            <span class="ft ft-ef">EF</span>
+            <span class="fv">= ES + Duration</span>
+            <span class="ft ft-lf">LF</span>
+            <span class="fv">= min(LS of successors)<br><em>= Project Duration if last</em></span>
+            <span class="ft ft-ls">LS</span>
+            <span class="fv">= LF − Duration</span>
+            <span class="ft ft-tf">TF</span>
+            <span class="fv">= LF − EF &nbsp;=&nbsp; LS − ES<br><em>= 0 on the critical path</em></span>
+          </div>
+        </details>
+      </div>
+
+    </div><!-- /lc -->
+
+    <!-- Right column -->
+    <div class="rc">
+
+      <!-- Network diagram -->
+      <div class="card net-card">
+        <div class="ch">
+          AON Network Diagram
+          <span class="ch-note" style="margin-left:4px;">← scroll inside →</span>
+          <!-- Show connections checkbox (right-aligned in header) -->
+          <label class="conn-chk-lbl">
+            <input type="checkbox" id="chk-conn" onchange="toggleShowConn()">
+            Show Node Connections
+          </label>
+        </div>
+        <!-- CP mode info bar -->
+        <div id="cp-mode-bar" class="cp-mode-bar">
+          🎯 <strong>CP Selection Mode active</strong> — tap any node to select/deselect. Number inputs are locked.
+        </div>
+        <!-- Scrollable network -->
+        <div class="net-outer">
+          <div id="net-cont"><svg id="net-svg"></svg></div>
+        </div>
+      </div>
+
+      <!-- Critical path panel -->
+      <div class="cp-panel">
+        <span class="cp-lbl">⬡ Critical path selected:</span>
+        <span id="cp-list">None — press 🎯 Mark CP below, then tap nodes</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="card">
+        <div class="ch">Actions</div>
+        <div class="ctrl">
+          <button class="btn btn-cp"    id="btn-cp"  onclick="toggleCPMode()">🎯 Mark Critical Path</button>
+          <button class="btn btn-check"              onclick="checkAnswers()">✓ Check Answers</button>
+          <button class="btn btn-hint"               onclick="showHint()">💡 Forward Hint</button>
+          <button class="btn btn-sol"                onclick="showSolution()">👁 Full Solution</button>
+          <button class="btn btn-rst"                onclick="resetInputs()">↺ Reset</button>
+        </div>
+        <div id="results" style="margin-top:10px;"></div>
+      </div>
+
+    </div><!-- /rc -->
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   CONSTANTS
+════════════════════════════════════════════════════════ */
+const MOB  = window.innerWidth < 640;
+const NW   = MOB ? 132 : 164;
+const NH   = MOB ? 72  : 86;
+const HGAP = MOB ? 46  : 78;
+const VGAP = MOB ? 24  : 34;
+const PAD  = MOB ? 14  : 22;
+
+/* ════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════ */
+let acts = [], cpm = null, pos = {};
+let studentCP = new Set();
+let cpMode    = false;
+
+/* ════════════════════════════════════════════════════════
+   PROBLEM GENERATION
+════════════════════════════════════════════════════════ */
+function generateProblem() {
+  for (let t = 0; t < 50; t++) { const r=tryGenerate(); if(r) return r; }
+  return [
+    {id:'A',duration:3,predecessors:[]},
+    {id:'B',duration:5,predecessors:['A']},
+    {id:'C',duration:4,predecessors:['A']},
+    {id:'D',duration:7,predecessors:['B']},
+    {id:'E',duration:3,predecessors:['B','C']},
+    {id:'F',duration:4,predecessors:['D','E']},
+  ];
+}
+
+function tryGenerate() {
+  const n = 5 + Math.floor(Math.random()*3);
+  const L = 'ABCDEFG';
+  const a = Array.from({length:n}, (_,i) => ({id:L[i], duration:2+Math.floor(Math.random()*9), predecessors:[]}));
+  a[1].predecessors = ['A'];
+  for (let i=2; i<n; i++) {
+    const want2 = i>=3 && Math.random()<0.38;
+    const pool = [];
+    for (let j=0;j<i;j++) { const w=j===i-1?8:j===i-2?2:0; for(let k=0;k<w;k++) pool.push(j); }
+    pool.sort(()=>Math.random()-0.5);
+    const chosen=new Set();
+    for (const c of pool) { if(chosen.size>=(want2?2:1)) break; chosen.add(c); }
+    if (chosen.size===0) chosen.add(i-1);
+    a[i].predecessors=[...chosen].map(j=>L[j]);
+  }
+  const c0=computeCPM(a), lv0=assignLevels(a,c0);
+  const last=a[n-1];
+  if (last.predecessors.length===1) {
+    const hasSucc=new Set();
+    a.forEach(x=>x.predecessors.forEach(p=>hasSucc.add(p)));
+    last.predecessors.forEach(p=>hasSucc.add(p));
+    const tLv=lv0[last.id]-1;
+    for (let i=0;i<n-2;i++) {
+      if (!hasSucc.has(L[i])&&!last.predecessors.includes(L[i])&&lv0[L[i]]===tLv) {
+        last.predecessors.push(L[i]); break;
+      }
+    }
+  }
+  const c=computeCPM(a), map=c.activities, lvls=assignLevels(a,c);
+  const sucCnt={};
+  a.forEach(x=>sucCnt[x.id]=0);
+  a.forEach(x=>x.predecessors.forEach(p=>sucCnt[p]++));
+  for (let i=0;i<n-1;i++) if (sucCnt[L[i]]===0) return null;
+  const cpCnt=Object.values(map).filter(x=>x.isCritical).length;
+  if (cpCnt<2||cpCnt>=n) return null;
+  const lvArr=Object.values(lvls);
+  if (Math.max(...[...new Set(lvArr)].map(l=>lvArr.filter(v=>v===l).length))>3) return null;
+  for (const act of a)
+    for (const pred of act.predecessors)
+      if (lvls[act.id]-lvls[pred]!==1) return null;
+  return a;
+}
+
+/* ════════════════════════════════════════════════════════
+   CPM
+════════════════════════════════════════════════════════ */
+function topoSort(acts) {
+  const inDeg={},adj={};
+  acts.forEach(a=>{inDeg[a.id]=0;adj[a.id]=[];});
+  acts.forEach(a=>a.predecessors.forEach(p=>{adj[p].push(a.id);inDeg[a.id]++;}));
+  const q=acts.filter(a=>inDeg[a.id]===0).map(a=>a.id),out=[];
+  while(q.length){const id=q.shift();out.push(id);adj[id].forEach(n=>{if(--inDeg[n]===0)q.push(n);});}
+  return out;
+}
+
+function computeCPM(acts) {
+  const map={};
+  acts.forEach(a=>map[a.id]={...a,es:0,ef:0,ls:0,lf:0,float:0,isCritical:false});
+  const order=topoSort(acts);
+  order.forEach(id=>{const a=map[id];a.es=a.predecessors.length?Math.max(...a.predecessors.map(p=>map[p].ef)):0;a.ef=a.es+a.duration;});
+  const projDur=Math.max(...acts.map(a=>map[a.id].ef));
+  const suc={};
+  acts.forEach(a=>suc[a.id]=[]);
+  acts.forEach(a=>a.predecessors.forEach(p=>suc[p].push(a.id)));
+  [...order].reverse().forEach(id=>{
+    const a=map[id];
+    a.lf=suc[id].length?Math.min(...suc[id].map(s=>map[s].ls)):projDur;
+    a.ls=a.lf-a.duration;a.float=a.lf-a.ef;a.isCritical=a.float===0;
+  });
+  return {activities:map,order,projectDuration:projDur};
+}
+
+/* ════════════════════════════════════════════════════════
+   LAYOUT
+════════════════════════════════════════════════════════ */
+function assignLevels(acts,cpmData) {
+  const lv={};
+  cpmData.order.forEach(id=>{
+    const a=cpmData.activities[id];
+    lv[id]=a.predecessors.length?Math.max(...a.predecessors.map(p=>lv[p]))+1:0;
+  });
+  return lv;
+}
+
+function computeLayout(acts,cpmData) {
+  const lv=assignLevels(acts,cpmData);
+  const byLv={};
+  Object.entries(lv).forEach(([id,l])=>{if(!byLv[l])byLv[l]=[];byLv[l].push(id);});
+  const numLv=Math.max(...Object.keys(byLv).map(Number))+1;
+  const maxCnt=Math.max(...Object.values(byLv).map(g=>g.length));
+  const maxH=maxCnt*NH+(maxCnt-1)*VGAP;
+  const actMap={};
+  acts.forEach(a=>actMap[a.id]=a);
+  const yc={};
+  for (let l=0;l<numLv;l++) {
+    const ids=byLv[l]||[];
+    if (l>0) {
+      ids.sort((A,B)=>{
+        const bary=id=>{const ps=actMap[id].predecessors;return ps.length?ps.reduce((s,p)=>s+(yc[p]??0),0)/ps.length:0;};
+        return bary(A)-bary(B);
+      });
+      byLv[l]=ids;
+    }
+    const cnt=ids.length,totH=cnt*NH+(cnt-1)*VGAP,sy=PAD+(maxH-totH)/2;
+    ids.forEach((id,i)=>{yc[id]=sy+i*(NH+VGAP)+NH/2;});
+  }
+  const positions={};
+  for (let l=0;l<numLv;l++) {
+    const ids=byLv[l]||[],cnt=ids.length,totH=cnt*NH+(cnt-1)*VGAP,sy=PAD+(maxH-totH)/2;
+    ids.forEach((id,i)=>{positions[id]={x:PAD+l*(NW+HGAP),y:sy+i*(NH+VGAP)};});
+  }
+  return {positions,width:PAD*2+numLv*NW+(numLv-1)*HGAP,height:PAD*2+maxH};
+}
+
+/* ════════════════════════════════════════════════════════
+   RENDER
+════════════════════════════════════════════════════════ */
+function renderTable(acts) {
+  const tb=document.getElementById('act-tbody');tb.innerHTML='';
+  acts.forEach(a=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${a.id}</td><td>${a.duration}</td><td>${a.predecessors.length?a.predecessors.join(', '):'—'}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderNetwork(acts,cpmData) {
+  const layout=computeLayout(acts,cpmData);
+  pos=layout.positions; studentCP=new Set();
+  const cont=document.getElementById('net-cont');
+  cont.querySelectorAll('.nd').forEach(n=>n.remove());
+  cont.style.width=layout.width+'px';
+  cont.style.height=layout.height+'px';
+  const svg=document.getElementById('net-svg');
+  svg.setAttribute('width',layout.width);
+  svg.setAttribute('height',layout.height);
+  // Arrows hidden by default — checkbox controls visibility
+  clearArrows();
+  acts.forEach(a=>createNode(a,cont));
+  refreshCPPanel();
+}
+
+function createNode(a,cont) {
+  const p=pos[a.id];
+  const el=document.createElement('div');
+  el.className='nd'; el.id='nd-'+a.id;
+  el.style.cssText=`left:${p.x}px;top:${p.y}px;width:${NW}px;height:${NH}px;`;
+  el.innerHTML=`
+    <div class="ng">
+      <div class="nc"><input class="ni" id="es-${a.id}" type="number" min="0" placeholder="ES" title="Early Start"></div>
+      <div class="nc nlb"><span class="nid">${a.id}</span><span class="ndu">${a.duration}d</span></div>
+      <div class="nc"><input class="ni" id="ef-${a.id}" type="number" min="0" placeholder="EF" title="Early Finish"></div>
+      <div class="nc"><input class="ni" id="ls-${a.id}" type="number" min="0" placeholder="LS" title="Late Start"></div>
+      <div class="nc"><input class="ni" id="tf-${a.id}" type="number" min="0" placeholder="TF" title="Total Float"></div>
+      <div class="nc"><input class="ni" id="lf-${a.id}" type="number" min="0" placeholder="LF" title="Late Finish"></div>
+    </div>`;
+  el.addEventListener('click', e => {
+    // In cp-mode: pointer-events:none on inputs lets clicks fall to the node div
+    if (!cpMode && e.target.tagName==='INPUT') return;
+    if (studentCP.has(a.id)) { studentCP.delete(a.id); el.classList.remove('cp-sel'); }
+    else                      { studentCP.add(a.id);    el.classList.add('cp-sel'); }
+    refreshCPPanel();
+  });
+  cont.appendChild(el);
+}
+
+function refreshCPPanel() {
+  const ordered=cpm?cpm.order.filter(id=>studentCP.has(id)):[...studentCP];
+  document.getElementById('cp-list').textContent=ordered.length
+    ? ordered.join(' → ')
+    : 'None — press 🎯 Mark CP below, then tap nodes';
+}
+
+/* ════════════════════════════════════════════════════════
+   ARROWS
+════════════════════════════════════════════════════════ */
+const NS='http://www.w3.org/2000/svg';
+const svgEl=t=>document.createElementNS(NS,t);
+
+function clearArrows() {
+  const svg=document.getElementById('net-svg');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+}
+
+function makeMarkers(svg,specs) {
+  const defs=svgEl('defs');
+  specs.forEach(({id,fill})=>{
+    const m=svgEl('marker');
+    m.setAttribute('id',id);m.setAttribute('markerWidth','9');m.setAttribute('markerHeight','6');
+    m.setAttribute('refX','8');m.setAttribute('refY','3');m.setAttribute('orient','auto');
+    const poly=svgEl('polygon');poly.setAttribute('points','0 0,9 3,0 6');poly.setAttribute('fill',fill);
+    m.appendChild(poly);defs.appendChild(m);
+  });
+  svg.appendChild(defs);
+}
+
+function bezier(svg,x1,y1,x2,y2,cls,markId) {
+  const dx=Math.max(20,(x2-x1)*0.5);
+  const path=svgEl('path');
+  path.setAttribute('d',`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`);
+  path.setAttribute('class',cls);
+  path.setAttribute('marker-end',`url(#${markId})`);
+  svg.appendChild(path);
+}
+
+function drawArrows(acts,svg,critEdges) {
+  clearArrows();
+  makeMarkers(svg,[{id:'ah',fill:'#94a3b8'},{id:'ah-r',fill:'#dc2626'}]);
+  acts.forEach(a=>a.predecessors.forEach(pid=>{
+    const src=pos[pid],tgt=pos[a.id]; if(!src||!tgt) return;
+    const isCp=critEdges[pid+'→'+a.id];
+    bezier(svg,src.x+NW,src.y+NH/2,tgt.x,tgt.y+NH/2,isCp?'arr-cp':'arr',isCp?'ah-r':'ah');
+  }));
+}
+
+/* ════════════════════════════════════════════════════════
+   SHOW NODE CONNECTIONS checkbox
+════════════════════════════════════════════════════════ */
+function toggleShowConn() {
+  const show=document.getElementById('chk-conn').checked;
+  const svg=document.getElementById('net-svg');
+  if (show) drawArrows(acts,svg,{});
+  else      clearArrows();
+}
+
+/* ════════════════════════════════════════════════════════
+   CP SELECTION MODE
+════════════════════════════════════════════════════════ */
+function toggleCPMode() {
+  cpMode=!cpMode;
+  const btn=document.getElementById('btn-cp');
+  const bar=document.getElementById('cp-mode-bar');
+  const cont=document.getElementById('net-cont');
+  if (cpMode) {
+    btn.classList.add('on'); btn.textContent='🎯 Exit CP Mode';
+    bar.classList.add('on'); cont.classList.add('cp-mode');
+  } else {
+    btn.classList.remove('on'); btn.textContent='🎯 Mark Critical Path';
+    bar.classList.remove('on'); cont.classList.remove('cp-mode');
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   CHECK ANSWERS
+════════════════════════════════════════════════════════ */
+function checkAnswers() {
+  if (!cpm) return;
+  if (cpMode) toggleCPMode();
+  const map=cpm.activities;
+
+  acts.forEach(a=>{
+    document.getElementById('nd-'+a.id).classList.remove('cp-corr','cp-wrong','cp-missed','cp-sel');
+    ['es','ef','ls','lf','tf'].forEach(f=>document.getElementById(`${f}-${a.id}`).classList.remove('ok','err'));
+  });
+
+  let correct=0,total=0;
+  const sv={};
+  acts.forEach(a=>{
+    const c=map[a.id];sv[a.id]={};
+    [['es',c.es],['ef',c.ef],['ls',c.ls],['lf',c.lf],['tf',c.float]].forEach(([f,val])=>{
+      total++;
+      const inp=document.getElementById(`${f}-${a.id}`);
+      const v=parseInt(inp.value,10),ok=!isNaN(v)&&v===val;
+      sv[a.id][f]={s:isNaN(v)?null:v,c:val,ok};
+      if(ok){correct++;inp.classList.add('ok');inp.title='✓ Correct';}
+      else  {         inp.classList.add('err');inp.title=`Correct: ${val}`;}
+    });
+  });
+
+  total++;
+  let cpOk=true; const critEdges={};
+  acts.forEach(a=>{
+    const nd=document.getElementById('nd-'+a.id);
+    nd.classList.remove('cp-sel');
+    const sel=studentCP.has(a.id),isCrit=map[a.id].isCritical;
+    if(isCrit){
+      nd.classList.add('cp-corr');
+      a.predecessors.forEach(p=>{if(map[p]&&map[p].isCritical)critEdges[p+'→'+a.id]=true;});
+    }
+    if(sel&&!isCrit){cpOk=false;nd.classList.add('cp-wrong');}
+    if(!sel&&isCrit){cpOk=false;nd.classList.add('cp-missed');}
+  });
+  if(cpOk) correct++;
+  drawArrows(acts,document.getElementById('net-svg'),critEdges);
+  // Keep checkbox in sync: checking answers always shows arrows
+  document.getElementById('chk-conn').checked=true;
+
+  const fields=['es','ef','ls','lf','tf'],fLbl={es:'ES',ef:'EF',ls:'LS',lf:'LF',tf:'TF'};
+  const allOk=acts.every(a=>fields.every(f=>sv[a.id][f].ok));
+  const corrRows=fields.map(f=>{
+    const cells=acts.map(a=>{
+      const d=sv[a.id][f];
+      return d.ok?`<td class="ct-ok">✓${d.c}</td>`
+           :d.s===null?`<td class="ct-bk">—→${d.c}</td>`
+           :`<td class="ct-err">${d.s}→${d.c}</td>`;
+    }).join('');
+    return `<tr><td>${fLbl[f]}</td>${cells}</tr>`;
+  }).join('');
+  const actH=acts.map(a=>`<th>${a.id}</th>`).join('');
+  const corrTbl=allOk?'':`<div style="margin-top:8px;overflow-x:auto;">
+    <div style="font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+      Correction table &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;">✓ correct &nbsp; wrong→correct</span>
+    </div>
+    <table class="ct"><thead><tr><th></th>${actH}</tr></thead><tbody>${corrRows}</tbody></table>
+  </div>`;
+
+  const pct=Math.round(correct/total*100);
+  const cpPath=cpm.order.filter(id=>map[id].isCritical).join(' → ');
+  const cls=pct===100?'res-ok':pct>=60?'res-mid':'res-bad';
+  const msg=pct===100?'Perfect! 🎉':pct>=60?'Check the table below.':'Work left→right (forward pass), then right→left (backward pass).';
+  const cpHtml=cpOk
+    ?`<span style="color:#16a34a;font-weight:700;">✓ Critical path correct</span>`
+    :`<span style="color:#dc2626;font-weight:700;">✗ Critical path wrong</span><span style="font-size:.74rem;"> — orange border = missed node, red glow = wrong selection</span>`;
+
+  document.getElementById('results').innerHTML=`
+    <div class="res ${cls}">
+      <div class="res-sc">${correct}/${total} correct (${pct}%)</div>
+      <div class="res-dt">
+        <strong>Critical path:</strong> ${cpPath} &nbsp;|&nbsp; <strong>Duration:</strong> ${cpm.projectDuration} days<br>
+        ${cpHtml}<br>
+        <span style="font-size:.76rem;opacity:.85;">${msg}</span>
+      </div>
+      ${corrTbl}
+    </div>`;
+}
+
+/* ════════════════════════════════════════════════════════
+   HINT / SOLUTION / RESET
+════════════════════════════════════════════════════════ */
+function showHint() {
+  if (!cpm) return;
+  const map=cpm.activities;
+  acts.forEach(a=>['es','ef'].forEach(f=>{
+    const i=document.getElementById(`${f}-${a.id}`);
+    i.value=map[a.id][f];i.classList.remove('err');i.classList.add('ok');
+  }));
+}
+
+function showSolution() {
+  if (!cpm) return;
+  if (cpMode) toggleCPMode();
+  const map=cpm.activities,critEdges={};
+  acts.forEach(a=>{
+    const c=map[a.id];
+    [['es',c.es],['ef',c.ef],['ls',c.ls],['lf',c.lf],['tf',c.float]].forEach(([f,val])=>{
+      const i=document.getElementById(`${f}-${a.id}`);
+      i.value=val;i.classList.remove('err');i.classList.add('ok');
+    });
+    const nd=document.getElementById('nd-'+a.id);
+    nd.classList.remove('cp-sel','cp-wrong','cp-missed');
+    if(c.isCritical){
+      nd.classList.add('cp-corr');
+      a.predecessors.forEach(p=>{if(map[p]&&map[p].isCritical)critEdges[p+'→'+a.id]=true;});
+    }
+  });
+  studentCP=new Set(acts.filter(a=>map[a.id].isCritical).map(a=>a.id));
+  refreshCPPanel();
+  drawArrows(acts,document.getElementById('net-svg'),critEdges);
+  document.getElementById('chk-conn').checked=true;
+  const cpPath=cpm.order.filter(id=>map[id].isCritical).join(' → ');
+  document.getElementById('results').innerHTML=
+    `<div class="res res-mid">Solution revealed. <strong>Critical path:</strong> ${cpPath} &nbsp;|&nbsp; <strong>Duration:</strong> ${cpm.projectDuration} days</div>`;
+}
+
+function resetInputs() {
+  if (!acts.length) return;
+  if (cpMode) toggleCPMode();
+  acts.forEach(a=>{
+    ['es','ef','ls','lf','tf'].forEach(f=>{
+      const i=document.getElementById(`${f}-${a.id}`);i.value='';i.classList.remove('ok','err');
+    });
+    document.getElementById('nd-'+a.id).classList.remove('cp-sel','cp-corr','cp-wrong','cp-missed');
+  });
+  studentCP=new Set();refreshCPPanel();
+  // Respect checkbox state on reset
+  const show=document.getElementById('chk-conn').checked;
+  if(show) drawArrows(acts,document.getElementById('net-svg'),{});
+  else     clearArrows();
+  document.getElementById('results').innerHTML='';
+}
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+function newProblem() {
+  if (cpMode) toggleCPMode();
+  document.getElementById('results').innerHTML='';
+  document.getElementById('chk-conn').checked=false;
+  acts=generateProblem(); cpm=computeCPM(acts);
+  renderTable(acts); renderNetwork(acts,cpm);
+}
+
+window.addEventListener('load',newProblem);
+</script>
+</body>
+</html>
