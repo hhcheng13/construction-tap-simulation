@@ -1,9 +1,9 @@
 export const TRADES = [
-  { id: "excavation", name: "Excavation", team: 1, units: 85, baseProductivity: 1.18, outdoor: true, robotBoost: false, color: "#8c5a2b" },
-  { id: "foundation", name: "Foundation", team: 2, units: 110, baseProductivity: 1.02, outdoor: true, robotBoost: false, color: "#556b78" },
-  { id: "structure", name: "Structure", team: 3, units: 125, baseProductivity: 0.94, outdoor: true, robotBoost: true, color: "#2f6cab" },
-  { id: "envelope", name: "Envelope", team: 4, units: 95, baseProductivity: 1.03, outdoor: true, robotBoost: true, color: "#d97706" },
-  { id: "mep", name: "MEP", team: 5, units: 115, baseProductivity: 0.98, outdoor: false, robotBoost: false, color: "#0f766e" }
+  { id: "excavation", name: "Structural Frame", team: 1, units: 85, baseProductivity: 1.18, outdoor: true, robotBoost: false, color: "#8c5a2b" },
+  { id: "foundation", name: "Floor Deck", team: 2, units: 110, baseProductivity: 1.02, outdoor: true, robotBoost: false, color: "#556b78" },
+  { id: "structure", name: "Facade & Windows", team: 3, units: 125, baseProductivity: 0.94, outdoor: true, robotBoost: true, color: "#2f6cab" },
+  { id: "envelope", name: "MEP Rough-In", team: 4, units: 95, baseProductivity: 1.03, outdoor: false, robotBoost: true, color: "#d97706" },
+  { id: "mep", name: "Interior Finish", team: 5, units: 115, baseProductivity: 0.98, outdoor: false, robotBoost: false, color: "#0f766e" }
 ];
 
 export const FLOORS = 5;
@@ -23,6 +23,7 @@ const ROBOT_MULTIPLIER = 1.2;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 0.05;
 const TAP_PROGRESS_RATIO = 0.085;
+const PLANNED_PROGRESS_RATIO = 0.058;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -32,8 +33,96 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
+function deterministicNoise(seed) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(index);
+    hash |= 0;
+  }
+  const normalized = Math.abs(Math.sin(hash) * 10000) % 1;
+  return normalized;
+}
+
 function taskId(tradeId, floor) {
   return `${tradeId}-F${floor}`;
+}
+
+function buildPlannedWindows() {
+  const tasks = {};
+  const taskProgress = {};
+  const plannedWindows = {};
+  let tick = 0;
+
+  for (let floor = 1; floor <= FLOORS; floor += 1) {
+    TRADES.forEach((trade) => {
+      const id = taskId(trade.id, floor);
+      tasks[id] = {
+        id,
+        floor,
+        tradeId: trade.id,
+        team: trade.team,
+        required: trade.units
+      };
+      taskProgress[id] = 0;
+    });
+  }
+
+  function isTaskEligible(task) {
+    if (taskProgress[task.id] >= task.required) {
+      return false;
+    }
+    const tradeIndex = TRADES.findIndex((trade) => trade.id === task.tradeId);
+    if (task.floor > 1) {
+      const previousFloorId = taskId(task.tradeId, task.floor - 1);
+      if (taskProgress[previousFloorId] < tasks[previousFloorId].required) {
+        return false;
+      }
+    }
+    if (tradeIndex > 0) {
+      const predecessorId = taskId(TRADES[tradeIndex - 1].id, task.floor);
+      if (taskProgress[predecessorId] < tasks[predecessorId].required) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  while (Object.keys(plannedWindows).length < FLOORS * TRADES.length && tick < 5000) {
+    let progressedThisCycle = false;
+
+    TRADES.forEach((trade) => {
+      const candidate = Object.values(tasks)
+        .filter((task) => task.team === trade.team && isTaskEligible(task))
+        .sort((a, b) => a.floor - b.floor)[0];
+
+      if (!candidate) {
+        return;
+      }
+
+      tick += 1;
+      progressedThisCycle = true;
+
+      if (!plannedWindows[candidate.id]) {
+        plannedWindows[candidate.id] = {
+          start: tick
+        };
+      }
+
+      const variability = 0.96 + deterministicNoise(`${candidate.id}-plan`) * 0.18;
+      const work = candidate.required * PLANNED_PROGRESS_RATIO * variability;
+      taskProgress[candidate.id] = clamp(taskProgress[candidate.id] + work, 0, candidate.required);
+
+      if (taskProgress[candidate.id] >= candidate.required) {
+        plannedWindows[candidate.id].finish = tick;
+      }
+    });
+
+    if (!progressedThisCycle) {
+      break;
+    }
+  }
+
+  return plannedWindows;
 }
 
 function makeTeamState(trade) {
@@ -80,20 +169,17 @@ function makeTask(trade, floor, plannedStart, plannedDuration) {
 export function makeInitialState() {
   const tasks = {};
   const teams = {};
-  const plannedWindows = {};
+  const plannedWindows = buildPlannedWindows();
 
   for (let floor = 1; floor <= FLOORS; floor += 1) {
-    TRADES.forEach((trade, index) => {
-      const plannedDuration = Math.ceil(trade.units / trade.baseProductivity);
-      const previousFloorKey = floor > 1 ? taskId(trade.id, floor - 1) : null;
-      const previousTradeKey = index > 0 ? taskId(TRADES[index - 1].id, floor) : null;
-      const previousFloorFinish = previousFloorKey ? plannedWindows[previousFloorKey]?.finish ?? 0 : 0;
-      const previousTradeFinish = previousTradeKey ? plannedWindows[previousTradeKey]?.finish ?? 0 : 0;
-      const plannedStart = Math.max(previousFloorFinish, previousTradeFinish);
-      tasks[taskId(trade.id, floor)] = makeTask(trade, floor, plannedStart, plannedDuration);
-      plannedWindows[taskId(trade.id, floor)] = {
-        start: plannedStart,
-        finish: plannedStart + plannedDuration
+    TRADES.forEach((trade) => {
+      const plannedWindow = plannedWindows[taskId(trade.id, floor)];
+      const plannedStart = plannedWindow?.start ?? 0;
+      const plannedFinish = plannedWindow?.finish ?? plannedStart + 1;
+      tasks[taskId(trade.id, floor)] = {
+        ...makeTask(trade, floor, plannedStart, plannedFinish - plannedStart),
+        plannedStartTick: plannedStart,
+        plannedFinishTick: plannedFinish
       };
     });
   }
@@ -297,28 +383,35 @@ export function getTotalRequiredUnits() {
 
 export function getTaskPlannedPoints(state) {
   const safeState = sanitizeState(state);
+  const tasks = Object.values(safeState.tasks);
   const totalRequired = getTotalRequiredUnits();
-  let cumulative = 0;
+  const maxTick = Math.max(...tasks.map((task) => task.plannedFinishTick), 1);
 
-  return Object.values(safeState.tasks)
-    .sort((a, b) => a.plannedFinishTick - b.plannedFinishTick || a.floor - b.floor || a.team - b.team)
-    .map((task) => {
-      cumulative += task.required;
-      return {
-        x: task.plannedFinishTick,
-        y: round((cumulative / totalRequired) * 100)
-      };
-    });
+  return Array.from({ length: maxTick + 1 }, (_, tick) => {
+    const completedUnits = tasks.reduce((sum, task) => {
+      if (tick <= task.plannedStartTick) {
+        return sum;
+      }
+      if (tick >= task.plannedFinishTick) {
+        return sum + task.required;
+      }
+      const span = Math.max(1, task.plannedFinishTick - task.plannedStartTick);
+      const portion = (tick - task.plannedStartTick) / span;
+      return sum + task.required * portion;
+    }, 0);
+
+    return {
+      x: tick,
+      y: round((completedUnits / totalRequired) * 100)
+    };
+  });
 }
 
 function normalizeTask(rawTask, trade, floor) {
-  const plannedDuration = Math.ceil(trade.units / trade.baseProductivity);
-  const tradeIndex = TRADES.findIndex((entry) => entry.id === trade.id);
-  const previousFloorKey = floor > 1 ? taskId(trade.id, floor - 1) : null;
-  const previousTradeKey = tradeIndex > 0 ? taskId(TRADES[tradeIndex - 1].id, floor) : null;
-  const previousFloorFinish = previousFloorKey ? Number(rawTask?.plannedPreviousFloorFinish) || 0 : 0;
-  const previousTradeFinish = previousTradeKey ? Number(rawTask?.plannedPreviousTradeFinish) || 0 : 0;
-  const fallbackPlannedStart = Math.max(previousFloorFinish, previousTradeFinish);
+  const plannedWindows = buildPlannedWindows();
+  const plannedWindow = plannedWindows[taskId(trade.id, floor)];
+  const fallbackPlannedStart = plannedWindow?.start ?? 0;
+  const plannedDuration = Math.max(1, (plannedWindow?.finish ?? 1) - fallbackPlannedStart);
   const safeTask = {
     ...makeTask(trade, floor, fallbackPlannedStart, plannedDuration),
     ...(rawTask || {})
