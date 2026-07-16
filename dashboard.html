@@ -409,18 +409,26 @@
     }
 
     function getTaskPlannedPoints(state) {
-      const tasks = Object.values(state.tasks)
-        .sort((a, b) => a.plannedFinishTick - b.plannedFinishTick || a.floor - b.floor || a.team - b.team);
-      const totalRequired = tasks.reduce((sum, task) => sum + task.required, 0);
-      let cumulative = 0;
+      const tasks = Object.values(state.tasks);
+      const projectFinishTick = Math.max(...tasks.map((task) => task.plannedFinishTick), 1);
+      const center = projectFinishTick * 0.52;
+      const steepness = 10 / projectFinishTick;
+      const points = [];
 
-      return tasks.map((task) => {
-        cumulative += task.required;
-        return {
-          x: task.plannedFinishTick,
-          y: totalRequired ? Math.round((cumulative / totalRequired) * 10000) / 100 : 0
-        };
-      });
+      for (let tick = 0; tick <= projectFinishTick; tick += 1) {
+        const logistic = 1 / (1 + Math.exp(-steepness * (tick - center)));
+        points.push({
+          x: tick,
+          y: Math.round(logistic * 10000) / 100
+        });
+      }
+
+      const baseline = points[0]?.y || 0;
+      const peak = points.at(-1)?.y || 100;
+      return points.map((point) => ({
+        x: point.x,
+        y: peak === baseline ? 0 : Math.round(((point.y - baseline) / (peak - baseline)) * 10000) / 100
+      }));
     }
 
     function renderTeamMultipliers(state) {
@@ -457,10 +465,10 @@
           .join("\n");
 
         const floorClass = floor === activeFloor ? "activeFloor" : "normalFloor";
-        blocks.push(`subgraph floor_${floor}["Floor ${floor}"]\n${nodes}\n${links}\nend\nclass floor_${floor} ${floorClass};`);
+        blocks.push(`subgraph floor_${floor}["Floor ${floor}"]\ndirection LR\n${nodes}\n${links}\nend\nclass floor_${floor} ${floorClass};`);
       }
 
-      const code = `flowchart LR
+      const code = `flowchart TB
 ${blocks.join("\n")}
 classDef blocked fill:#e5e7eb,stroke:#6b7280,stroke-width:1px,color:#111827;
 classDef ready fill:#bfdbfe,stroke:#1d4ed8,stroke-width:2px,color:#111827;
@@ -619,20 +627,25 @@ classDef normalFloor fill:#fffbf5,stroke:#d6d3d1,stroke-width:1px,color:#111827;
         const points = [];
         for (let floor = 1; floor <= FLOORS; floor += 1) {
           const task = state.tasks[`${trade.id}-F${floor}`];
-          if (task.startTick !== null || task.finishTick !== null) {
+          const startTick = Number.isFinite(task.startTick) && task.startTick > 0 ? task.startTick : null;
+          const finishTick = Number.isFinite(task.finishTick) && task.finishTick > 0 ? task.finishTick : null;
+          const plotTick = finishTick ?? startTick;
+
+          if (plotTick !== null) {
             points.push({
-              x: task.finishTick ?? task.startTick,
+              x: plotTick,
               y: floor
             });
           }
         }
         return {
           label: trade.name,
-          data: points,
+          data: points.sort((a, b) => a.y - b.y),
           parsing: false,
           borderColor: getTradeColor(trade.id),
           backgroundColor: getTradeColor(trade.id),
           showLine: true,
+          spanGaps: false,
           tension: 0
         };
       });

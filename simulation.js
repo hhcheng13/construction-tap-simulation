@@ -80,15 +80,22 @@ function makeTask(trade, floor, plannedStart, plannedDuration) {
 export function makeInitialState() {
   const tasks = {};
   const teams = {};
-  let runningStart = 0;
+  const plannedWindows = {};
 
   for (let floor = 1; floor <= FLOORS; floor += 1) {
     TRADES.forEach((trade, index) => {
       const plannedDuration = Math.ceil(trade.units / trade.baseProductivity);
-      const plannedStart = runningStart + index * 12;
+      const previousFloorKey = floor > 1 ? taskId(trade.id, floor - 1) : null;
+      const previousTradeKey = index > 0 ? taskId(TRADES[index - 1].id, floor) : null;
+      const previousFloorFinish = previousFloorKey ? plannedWindows[previousFloorKey]?.finish ?? 0 : 0;
+      const previousTradeFinish = previousTradeKey ? plannedWindows[previousTradeKey]?.finish ?? 0 : 0;
+      const plannedStart = Math.max(previousFloorFinish, previousTradeFinish);
       tasks[taskId(trade.id, floor)] = makeTask(trade, floor, plannedStart, plannedDuration);
+      plannedWindows[taskId(trade.id, floor)] = {
+        start: plannedStart,
+        finish: plannedStart + plannedDuration
+      };
     });
-    runningStart += 48;
   }
 
   TRADES.forEach((trade) => {
@@ -178,6 +185,12 @@ export function overallProgress(state) {
   const required = tasks.reduce((sum, task) => sum + (Number(task.required) || 0), 0);
   const done = tasks.reduce((sum, task) => sum + clamp(Number(task.done) || 0, 0, Number(task.required) || 0), 0);
   return required ? done / required : 0;
+}
+
+function calculatePhaseMultiplier(state) {
+  const progress = overallProgress(state);
+  const bellCurve = 1 - Math.pow((progress - 0.5) / 0.5, 2);
+  return round(clamp(0.72 + bellCurve * 0.56, 0.72, 1.28));
 }
 
 export function getCompletedTasksCount(state) {
@@ -300,8 +313,14 @@ export function getTaskPlannedPoints(state) {
 
 function normalizeTask(rawTask, trade, floor) {
   const plannedDuration = Math.ceil(trade.units / trade.baseProductivity);
+  const tradeIndex = TRADES.findIndex((entry) => entry.id === trade.id);
+  const previousFloorKey = floor > 1 ? taskId(trade.id, floor - 1) : null;
+  const previousTradeKey = tradeIndex > 0 ? taskId(TRADES[tradeIndex - 1].id, floor) : null;
+  const previousFloorFinish = previousFloorKey ? Number(rawTask?.plannedPreviousFloorFinish) || 0 : 0;
+  const previousTradeFinish = previousTradeKey ? Number(rawTask?.plannedPreviousTradeFinish) || 0 : 0;
+  const fallbackPlannedStart = Math.max(previousFloorFinish, previousTradeFinish);
   const safeTask = {
-    ...makeTask(trade, floor, (floor - 1) * 48 + TRADES.findIndex((entry) => entry.id === trade.id) * 12, plannedDuration),
+    ...makeTask(trade, floor, fallbackPlannedStart, plannedDuration),
     ...(rawTask || {})
   };
   safeTask.team = trade.team;
@@ -466,7 +485,8 @@ function applyWorkToTask(state, teamNumber, source, baseRatio) {
   const fatigueMultiplier = calculateFatigueMultiplier(team, state.controls);
   const rainMultiplier = calculateRainMultiplier(trade, state.environment);
   const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
-  const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier;
+  const phaseMultiplier = calculatePhaseMultiplier(state);
+  const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier * phaseMultiplier;
   const varianceRange = source === "tap" ? [0.9, 1.18] : [0.92, 1.08];
   const { variabilityMultiplier, work } = calculateWorkAmount(
     candidate,
