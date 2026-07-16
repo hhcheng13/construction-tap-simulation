@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Construction Simulation Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family:system-ui,sans-serif; margin:0; background:#f3f3f3; }
+    header { padding:14px 20px; background:white; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    button { padding:10px 14px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; }
+    .panel { background:white; border-radius:12px; padding:12px; min-height:360px; overflow:auto; }
+    canvas { max-height:320px; }
+    @media(max-width:900px){ .grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+<header>
+  <strong>Live Construction Control</strong>
+  <button id="reset">Reset</button>
+  <button id="start">Start / Pause</button>
+  <span id="summary"></span>
+</header>
+
+<div class="grid">
+  <section class="panel"><h2>1. CPM Network</h2><div id="cpm"></div></section>
+  <section class="panel"><h2>2. Gantt Chart</h2><canvas id="gantt"></canvas></section>
+  <section class="panel"><h2>3. Progress S-Curve</h2><canvas id="scurve"></canvas></section>
+  <section class="panel"><h2>4. Line of Balance</h2><canvas id="lob"></canvas></section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { makeInitialState, overallProgress, TRADES, FLOORS } from "./simulation.js";
+
+mermaid.initialize({ startOnLoad:false, securityLevel:"loose" });
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const gameRef = ref(db, "games/live");
+
+let history = [];
+let ganttChart, sChart, lobChart;
+
+document.querySelector("#reset").onclick = async () => {
+  history = [];
+  await set(gameRef, makeInitialState());
+};
+
+document.querySelector("#start").onclick = async () => {
+  await runTransaction(gameRef, state => {
+    state ||= makeInitialState();
+    state.running = !state.running;
+    if (state.running && !state.startedAt) state.startedAt = Date.now();
+    return state;
+  });
+};
+
+onValue(gameRef, async snap => {
+  const state = snap.val();
+  if (!state) return;
+
+  const progress = overallProgress(state);
+  document.querySelector("#summary").textContent =
+    `${state.running ? "RUNNING" : "PAUSED"} · Overall ${Math.round(progress*100)}%`;
+
+  const now = Date.now();
+  if (!history.length || now - history.at(-1).time > 800) {
+    history.push({ time: now, progress: progress * 100 });
+  }
+
+  await renderCPM(state);
+  renderGantt(state);
+  renderSCurve();
+  renderLOB(state);
+});
+
+async function renderCPM(state) {
+  const currentFloor = Math.min(
+    FLOORS,
+    Math.max(1, ...Object.values(state.tasks).filter(t => t.done > 0).map(t => t.floor))
+  );
+
+  const nodes = TRADES.map((t, i) => {
+    const task = state.tasks[`${t.id}-F${currentFloor}`];
+    const pct = Math.round(task.done / task.required * 100);
+    const cls = task.status === "complete" ? "done" :
+                task.status === "active" ? "active" :
+                task.status === "ready" ? "ready" : "blocked";
+    return `${t.id}["${t.name}<br/>F${currentFloor}: ${pct}%"]:::${cls}`;
+  }).join("\n");
+
+  const links = TRADES.slice(0,-1).map((t,i) => `${t.id} --> ${TRADES[i+1].id}`).join("\n");
+  const code = `flowchart LR
+${nodes}
+${links}
+classDef done fill:#d9ead3,stroke:#38761d;
+classDef active fill:#fff2cc,stroke:#bf9000;
+classDef ready fill:#cfe2f3,stroke:#0b5394;
+classDef blocked fill:#eeeeee,stroke:#777777;`;
+
+  const { svg } = await mermaid.render("cpmGraph", code);
+  document.querySelector("#cpm").innerHTML = svg;
+}
+
+function renderGantt(state) {
+  const completed = Object.values(state.tasks)
+    .filter(t => t.startTick !== null)
+    .sort((a,b) => a.floor-b.floor || a.team-b.team);
+
+  const labels = completed.map(t => `${t.tradeName} F${t.floor}`);
+  const data = completed.map(t => [
+    t.startTick,
+    t.finishTick ?? state.tick
+  ]);
+
+  ganttChart?.destroy();
+  ganttChart = new Chart(document.querySelector("#gantt"), {
+    type:"bar",
+    data:{ labels, datasets:[{ label:"Observed work window", data }] },
+    options:{
+      indexAxis:"y",
+      responsive:true,
+      animation:false,
+      scales:{ x:{ title:{ display:true, text:"Simulation tick" } } },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+}
+
+function renderSCurve() {
+  const t0 = history[0]?.time || Date.now();
+  const actual = history.map(p => ({ x:(p.time-t0)/1000, y:p.progress }));
+  const planned = Array.from({length:21}, (_,i) => {
+    const x = i * Math.max(1, (actual.at(-1)?.x || 20) / 20);
+    const y = 100 / (1 + Math.exp(-0.45 * (i - 10)));
+    return {x,y};
+  });
+
+  sChart?.destroy();
+  sChart = new Chart(document.querySelector("#scurve"), {
+    type:"line",
+    data:{ datasets:[
+      { label:"Actual progress", data:actual, parsing:false },
+      { label:"Illustrative planned progress", data:planned, parsing:false, borderDash:[6,4] }
+    ]},
+    options:{
+      responsive:true, animation:false,
+      scales:{
+        x:{ type:"linear", title:{display:true,text:"Elapsed seconds"} },
+        y:{ min:0,max:100,title:{display:true,text:"Progress (%)"} }
+      }
+    }
+  });
+}
+
+function renderLOB(state) {
+  const datasets = TRADES.map(trade => {
+    const data = [];
+    for (let floor=1; floor<=FLOORS; floor++) {
+      const task = state.tasks[`${trade.id}-F${floor}`];
+      if (task.startTick !== null) data.push({x:task.startTick, y:floor});
+      if (task.finishTick !== null) data.push({x:task.finishTick, y:floor});
+    }
+    return { label:trade.name, data, parsing:false, showLine:true };
+  });
+
+  lobChart?.destroy();
+  lobChart = new Chart(document.querySelector("#lob"), {
+    type:"scatter",
+    data:{datasets},
+    options:{
+      responsive:true, animation:false,
+      scales:{
+        x:{title:{display:true,text:"Simulation tick"}},
+        y:{min:1,max:FLOORS,ticks:{stepSize:1},title:{display:true,text:"Floor"}}
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

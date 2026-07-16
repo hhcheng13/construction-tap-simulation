@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Construction Tap Game</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background:#f4f4f4; }
+    main { max-width: 560px; margin:auto; padding:24px; text-align:center; }
+    .card { background:white; border-radius:16px; padding:20px; box-shadow:0 4px 16px #0002; }
+    button { width:100%; min-height:160px; border:0; border-radius:18px; font-size:2rem; font-weight:700; }
+    select, .small { font-size:1rem; padding:10px; margin:8px 0; }
+    progress { width:100%; height:24px; }
+    #status { min-height:3em; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Construction Tap Game</h1>
+    <p>Choose the team assigned by your lecturer.</p>
+    <select id="team">
+      <option value="1">Team 1 — Excavation</option>
+      <option value="2">Team 2 — Foundation</option>
+      <option value="3">Team 3 — Structure</option>
+      <option value="4">Team 4 — Envelope</option>
+      <option value="5">Team 5 — MEP</option>
+    </select>
+    <p id="status">Connecting…</p>
+    <progress id="progress" max="100" value="0"></progress>
+    <p><button id="tap" disabled>TAP TO WORK</button></p>
+    <p class="small">Work may be blocked until predecessor activities finish.</p>
+  </div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { applyTap, overallProgress, TRADES } from "./simulation.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const gameRef = ref(db, "games/live");
+
+const teamSelect = document.querySelector("#team");
+const tapButton = document.querySelector("#tap");
+const statusEl = document.querySelector("#status");
+const progressEl = document.querySelector("#progress");
+
+let latestState = null;
+let locked = false;
+
+onValue(gameRef, snap => {
+  latestState = snap.val();
+  if (!latestState) {
+    statusEl.textContent = "Lecturer has not initialized the game.";
+    tapButton.disabled = true;
+    return;
+  }
+  const team = Number(teamSelect.value);
+  const trade = TRADES.find(t => t.team === team);
+  const active = Object.values(latestState.tasks || {})
+    .find(t => t.team === team && (t.status === "active" || t.status === "ready"));
+
+  progressEl.value = overallProgress(latestState) * 100;
+  tapButton.disabled = !latestState.running;
+
+  if (!latestState.running) statusEl.textContent = "Waiting for lecturer to start.";
+  else if (active) statusEl.textContent = `${trade.name}: Floor ${active.floor} — ${Math.round(active.done / active.required * 100)}%`;
+  else statusEl.textContent = `${trade.name}: blocked or finished.`;
+});
+
+tapButton.addEventListener("pointerdown", async () => {
+  if (locked) return;
+  locked = true;
+  tapButton.textContent = "WORKING…";
+
+  const team = Number(teamSelect.value);
+  await runTransaction(gameRef, state => {
+    if (!state) return state;
+    return applyTap(state, team);
+  }, { applyLocally: false });
+
+  setTimeout(() => {
+    locked = false;
+    tapButton.textContent = "TAP TO WORK";
+  }, 90);
+});
+</script>
+</body>
+</html>
