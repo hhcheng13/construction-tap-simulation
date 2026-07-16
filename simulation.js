@@ -3,10 +3,10 @@ export const TRADES = [
   { id: "foundation", name: "Floor Deck", team: 2, units: 110, baseProductivity: 1.02, outdoor: true, robotBoost: false, color: "#556b78" },
   { id: "structure", name: "Facade & Windows", team: 3, units: 125, baseProductivity: 0.94, outdoor: true, robotBoost: true, color: "#2f6cab" },
   { id: "envelope", name: "MEP Rough-In", team: 4, units: 95, baseProductivity: 1.03, outdoor: false, robotBoost: true, color: "#d97706" },
-  { id: "mep", name: "Interior Finish", team: 5, units: 115, baseProductivity: 0.98, outdoor: false, robotBoost: false, color: "#0f766e" }
+  { id: "mep", name: "Interior Finish", team: 5, units: 145, baseProductivity: 0.84, outdoor: false, robotBoost: false, color: "#0f766e" }
 ];
 
-export const FLOORS = 5;
+export const FLOORS = 3;
 export const GAME_PATH = "games/live";
 export const STATUS = {
   WAITING: "Waiting for lecturer",
