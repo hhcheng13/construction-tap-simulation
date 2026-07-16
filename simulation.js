@@ -21,7 +21,7 @@ const HISTORY_LIMIT = 240;
 const RAIN_MULTIPLIER = 0.78;
 const ROBOT_MULTIPLIER = 1.2;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
-const AUTO_PROGRESS_RATIO = 0.026;
+const AUTO_PROGRESS_RATIO = 1;
 const TAP_PROGRESS_RATIO = 0.052;
 const PLANNED_PRODUCTIVITY_FACTOR = 2.35;
 const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
@@ -36,6 +36,14 @@ function round(value) {
 
 function taskId(tradeId, floor) {
   return `${tradeId}-F${floor}`;
+}
+
+function getPlannedDurationTicks(task) {
+  return Math.max(1, (task.plannedFinishTick || 1) - (task.plannedStartTick || 0));
+}
+
+function getPlannedWorkPerTick(task) {
+  return task.required / getPlannedDurationTicks(task);
 }
 
 function getPlannedDuration(trade, floor) {
@@ -543,14 +551,25 @@ function applyWorkToTask(state, teamNumber, source, baseRatio) {
   const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
   const phaseMultiplier = calculatePhaseMultiplier(state);
   const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier * phaseMultiplier;
-  const varianceRange = source === "tap" ? [0.9, 1.18] : [0.92, 1.08];
-  const { variabilityMultiplier, work } = calculateWorkAmount(
-    candidate,
-    baseRatio,
-    totalMultiplier,
-    varianceRange[0],
-    varianceRange[1]
-  );
+  let variabilityMultiplier;
+  let work;
+
+  if (source === "auto") {
+    // Auto progress should trail the planned baseline by only 0% to 10%.
+    variabilityMultiplier = round(0.9 + Math.random() * 0.1);
+    work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
+  } else {
+    const varianceRange = [0.9, 1.18];
+    const calculated = calculateWorkAmount(
+      candidate,
+      baseRatio,
+      totalMultiplier,
+      varianceRange[0],
+      varianceRange[1]
+    );
+    variabilityMultiplier = calculated.variabilityMultiplier;
+    work = calculated.work;
+  }
 
   if (candidate.startTick === null) {
     candidate.startTick = state.tick;
@@ -561,7 +580,9 @@ function applyWorkToTask(state, teamNumber, source, baseRatio) {
   team.fatigueMultiplier = round(fatigueMultiplier);
   team.rainMultiplier = round(rainMultiplier);
   team.robotMultiplier = round(robotMultiplier);
-  team.productivityMultiplier = round(totalMultiplier * variabilityMultiplier);
+  team.productivityMultiplier = source === "auto"
+    ? round(variabilityMultiplier)
+    : round(totalMultiplier * variabilityMultiplier);
   team.fatigueLevel = round((1 - fatigueMultiplier) * 100);
 
   candidate.done = clamp(round(candidate.done + work), 0, candidate.required);
