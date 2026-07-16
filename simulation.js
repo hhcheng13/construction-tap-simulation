@@ -21,8 +21,8 @@ const HISTORY_LIMIT = 240;
 const RAIN_MULTIPLIER = 0.78;
 const ROBOT_MULTIPLIER = 1.2;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
-const AUTO_PROGRESS_RATIO = 0.05;
-const TAP_PROGRESS_RATIO = 0.085;
+const AUTO_PROGRESS_RATIO = 0.026;
+const TAP_PROGRESS_RATIO = 0.052;
 const PLANNED_PRODUCTIVITY_FACTOR = 2.35;
 const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
 
@@ -235,7 +235,7 @@ export function overallProgress(state) {
 function calculatePhaseMultiplier(state) {
   const progress = overallProgress(state);
   const bellCurve = 1 - Math.pow((progress - 0.5) / 0.5, 2);
-  return round(clamp(0.72 + bellCurve * 0.56, 0.72, 1.28));
+  return round(clamp(0.6 + bellCurve * 0.42, 0.6, 1.02));
 }
 
 export function getCompletedTasksCount(state) {
