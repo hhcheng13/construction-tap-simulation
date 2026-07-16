@@ -108,8 +108,8 @@ function buildPlannedWindows() {
         };
       }
 
-      const variability = 0.96 + deterministicNoise(`${candidate.id}-plan`) * 0.18;
-      const work = candidate.required * PLANNED_PROGRESS_RATIO * variability;
+      const floorLearningMultiplier = Math.max(0.78, 1 - (candidate.floor - 1) * 0.06);
+      const work = candidate.required * PLANNED_PROGRESS_RATIO / floorLearningMultiplier;
       taskProgress[candidate.id] = clamp(taskProgress[candidate.id] + work, 0, candidate.required);
 
       if (taskProgress[candidate.id] >= candidate.required) {

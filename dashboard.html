@@ -344,7 +344,6 @@
   <main class="page">
     <section class="panel" aria-labelledby="cpm-title">
       <h2 id="cpm-title">CPM</h2>
-      <p>Current active floor and trade sequence.</p>
       <div class="cpm-meta">
         <span id="activeFloor">Active Floor: 1</span>
         <div class="legend">
@@ -360,19 +359,16 @@
 
     <section class="panel" aria-labelledby="gantt-title">
       <h2 id="gantt-title">Gantt Chart</h2>
-      <p>Planned versus actual activity windows by floor and trade.</p>
       <div class="chart-wrap"><canvas id="gantt"></canvas></div>
     </section>
 
     <section class="panel" aria-labelledby="scurve-title">
       <h2 id="scurve-title">Progress S-Curve</h2>
-      <p>Cumulative physical progress against the planned curve.</p>
       <div class="chart-wrap"><canvas id="scurve"></canvas></div>
     </section>
 
     <section class="panel" aria-labelledby="lob-title">
       <h2 id="lob-title">Line of Balance</h2>
-      <p>Trade start and finish lines by time and floor.</p>
       <div class="chart-wrap"><canvas id="lob"></canvas></div>
     </section>
   </main>
@@ -753,31 +749,51 @@
 
     function renderLOB(state) {
       const chart = ensureLOBChart();
-      const tradeDatasets = TRADES.map((trade) => {
-        const points = [];
+      const tradeDatasets = TRADES.flatMap((trade) => {
+        const actualFinishPoints = [];
+        const plannedFinishPoints = [];
         for (let floor = 1; floor <= FLOORS; floor += 1) {
           const task = state.tasks[`${trade.id}-F${floor}`];
-          const startTick = Number.isFinite(task.startTick) && task.startTick > 0 ? task.startTick : null;
+          plannedFinishPoints.push({
+            x: task.plannedFinishTick,
+            y: floor
+          });
           const finishTick = Number.isFinite(task.finishTick) && task.finishTick > 0 ? task.finishTick : null;
-          const plotTick = finishTick ?? startTick;
 
-          if (plotTick !== null) {
-            points.push({
-              x: plotTick,
+          if (finishTick !== null) {
+            actualFinishPoints.push({
+              x: finishTick,
               y: floor
             });
           }
         }
-        return {
-          label: trade.name,
-          data: points.sort((a, b) => a.y - b.y),
-          parsing: false,
-          borderColor: getTradeColor(trade.id),
-          backgroundColor: getTradeColor(trade.id),
-          showLine: true,
-          spanGaps: false,
-          tension: 0
-        };
+        return [
+          {
+            label: `${trade.name} Planned Finish`,
+            data: plannedFinishPoints.sort((a, b) => a.y - b.y),
+            parsing: false,
+            borderColor: getTradeColor(trade.id),
+            backgroundColor: getTradeColor(trade.id),
+            borderDash: [6, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            showLine: true,
+            spanGaps: false,
+            tension: 0
+          },
+          {
+            label: `${trade.name} Actual Finish`,
+            data: actualFinishPoints.sort((a, b) => a.y - b.y),
+            parsing: false,
+            borderColor: getTradeColor(trade.id),
+            backgroundColor: getTradeColor(trade.id),
+            pointRadius: 3,
+            pointHoverRadius: 4,
+            showLine: true,
+            spanGaps: false,
+            tension: 0
+          }
+        ];
       });
       const collisionPoints = [];
 
