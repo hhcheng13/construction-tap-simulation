@@ -258,6 +258,7 @@
       applyControlToggle,
       getActiveFloor,
       getDashboardMetrics,
+      getTaskPlannedPoints,
       getTaskNodeState,
       getTradeColor,
       makeInitialState,
@@ -498,12 +499,16 @@ classDef complete fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#111827;`;
     function renderGantt(state) {
       const chart = ensureGanttChart();
       const tasks = Object.values(state.tasks)
-        .sort((a, b) => a.floor - b.floor || a.team - b.team)
-        .slice(0, 25);
+        .sort((a, b) => a.floor - b.floor || a.team - b.team);
 
       chart.data.labels = tasks.map((task) => `F${task.floor} ${task.tradeName}`);
       chart.data.datasets[0].data = tasks.map((task) => [task.plannedStartTick, task.plannedFinishTick]);
-      chart.data.datasets[1].data = tasks.map((task) => [task.startTick ?? task.plannedStartTick, task.finishTick ?? state.tick]);
+      chart.data.datasets[1].data = tasks.map((task) => {
+        if (task.startTick === null) {
+          return null;
+        }
+        return [task.startTick, task.finishTick ?? state.tick];
+      });
       chart.update();
     }
 
@@ -552,11 +557,7 @@ classDef complete fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#111827;`;
         x: item.tick,
         y: item.overallProgress
       }));
-      const maxTick = Math.max(state.tick, 1);
-      const planned = Array.from({ length: maxTick + 1 }, (_, tick) => ({
-        x: tick,
-        y: Math.min(100, Math.round((100 / (1 + Math.exp(-0.11 * (tick - maxTick * 0.55)))) * 100) / 100)
-      }));
+      const planned = getTaskPlannedPoints(state);
 
       chart.data.datasets[0].data = planned;
       chart.data.datasets[1].data = actual;
@@ -594,11 +595,11 @@ classDef complete fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#111827;`;
         const points = [];
         for (let floor = 1; floor <= FLOORS; floor += 1) {
           const task = state.tasks[`${trade.id}-F${floor}`];
-          if (task.startTick !== null) {
-            points.push({ x: task.startTick, y: floor });
-          }
-          if (task.finishTick !== null) {
-            points.push({ x: task.finishTick, y: floor });
+          if (task.startTick !== null || task.finishTick !== null) {
+            points.push({
+              x: task.finishTick ?? task.startTick,
+              y: floor
+            });
           }
         }
         return {

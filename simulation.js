@@ -6,7 +6,7 @@ export const TRADES = [
   { id: "mep", name: "MEP", team: 5, units: 115, baseProductivity: 0.98, outdoor: false, robotBoost: false, color: "#0f766e" }
 ];
 
-export const FLOORS = 10;
+export const FLOORS = 5;
 export const GAME_PATH = "games/live";
 export const STATUS = {
   WAITING: "Waiting for lecturer",
@@ -21,8 +21,8 @@ const HISTORY_LIMIT = 240;
 const RAIN_MULTIPLIER = 0.78;
 const ROBOT_MULTIPLIER = 1.2;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
-const AUTO_PROGRESS_RATIO = 0.1;
-const TAP_PROGRESS_RATIO = 0.28;
+const AUTO_PROGRESS_RATIO = 0.05;
+const TAP_PROGRESS_RATIO = 0.085;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -276,6 +276,26 @@ function appendHistory(state) {
     history[history.length - 1] = snapshot;
   }
   state.history = history.slice(-HISTORY_LIMIT);
+}
+
+export function getTotalRequiredUnits() {
+  return TRADES.reduce((sum, trade) => sum + trade.units, 0) * FLOORS;
+}
+
+export function getTaskPlannedPoints(state) {
+  const safeState = sanitizeState(state);
+  const totalRequired = getTotalRequiredUnits();
+  let cumulative = 0;
+
+  return Object.values(safeState.tasks)
+    .sort((a, b) => a.plannedFinishTick - b.plannedFinishTick || a.floor - b.floor || a.team - b.team)
+    .map((task) => {
+      cumulative += task.required;
+      return {
+        x: task.plannedFinishTick,
+        y: round((cumulative / totalRequired) * 100)
+      };
+    });
 }
 
 function normalizeTask(rawTask, trade, floor) {
