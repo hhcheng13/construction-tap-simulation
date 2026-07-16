@@ -24,6 +24,7 @@ export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 0.05;
 const TAP_PROGRESS_RATIO = 0.085;
 const PLANNED_PRODUCTIVITY_FACTOR = 2.35;
+const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -37,8 +38,32 @@ function taskId(tradeId, floor) {
   return `${tradeId}-F${floor}`;
 }
 
+function getPlannedDuration(trade, floor) {
+  const floorIndex = Math.max(0, floor - 1);
+  const learningFactor = FLOOR_LEARNING_REDUCTION[floorIndex] ?? FLOOR_LEARNING_REDUCTION.at(-1) ?? 0.8;
+  const baseDuration = trade.units / (trade.baseProductivity * PLANNED_PRODUCTIVITY_FACTOR);
+  return Math.max(
+    12,
+    Math.ceil(baseDuration * (trade.plannedDurationFactor || 1) * learningFactor)
+  );
+}
+
 function buildPlannedWindows() {
   const plannedWindows = {};
+  const plannedDurationsByTrade = {};
+
+  TRADES.forEach((trade) => {
+    plannedDurationsByTrade[trade.id] = [];
+    for (let floor = 1; floor <= FLOORS; floor += 1) {
+      const proposedDuration = getPlannedDuration(trade, floor);
+      const previousDuration = plannedDurationsByTrade[trade.id][floor - 2];
+      const safeDuration = previousDuration
+        ? Math.min(previousDuration, proposedDuration)
+        : proposedDuration;
+      plannedDurationsByTrade[trade.id].push(safeDuration);
+    }
+  });
+
   for (let floor = 1; floor <= FLOORS; floor += 1) {
     TRADES.forEach((trade, index) => {
       const id = taskId(trade.id, floor);
@@ -47,17 +72,7 @@ function buildPlannedWindows() {
       const previousFloorFinish = previousFloorId ? plannedWindows[previousFloorId].finish : 0;
       const predecessorFinish = predecessorId ? plannedWindows[predecessorId].finish : 0;
       const start = Math.max(previousFloorFinish, predecessorFinish);
-
-      // Stable learning curve: higher floors get modestly faster, never random.
-      const learningFactor = Math.max(0.82, 1 - (floor - 1) * 0.07);
-      const duration = Math.max(
-        12,
-        Math.ceil(
-          (trade.units / (trade.baseProductivity * PLANNED_PRODUCTIVITY_FACTOR)) *
-          learningFactor *
-          (trade.plannedDurationFactor || 1)
-        )
-      );
+      const duration = plannedDurationsByTrade[trade.id][floor - 1];
 
       plannedWindows[id] = {
         start,
