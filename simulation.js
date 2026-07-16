@@ -1,9 +1,9 @@
 export const TRADES = [
-  { id: "excavation", name: "Structural Frame", team: 1, units: 85, baseProductivity: 1.18, outdoor: true, robotBoost: false, color: "#8c5a2b" },
-  { id: "foundation", name: "Floor Deck", team: 2, units: 110, baseProductivity: 1.02, outdoor: true, robotBoost: false, color: "#556b78" },
-  { id: "structure", name: "Facade & Windows", team: 3, units: 125, baseProductivity: 0.94, outdoor: true, robotBoost: true, color: "#2f6cab" },
-  { id: "envelope", name: "MEP Rough-In", team: 4, units: 95, baseProductivity: 1.03, outdoor: false, robotBoost: true, color: "#d97706" },
-  { id: "mep", name: "Interior Finish", team: 5, units: 145, baseProductivity: 0.84, outdoor: false, robotBoost: false, color: "#0f766e" }
+  { id: "excavation", name: "Structural Frame", team: 1, units: 85, baseProductivity: 1.18, plannedDurationFactor: 1.5, outdoor: true, robotBoost: false, color: "#8c5a2b" },
+  { id: "foundation", name: "Floor Deck", team: 2, units: 110, baseProductivity: 1.02, plannedDurationFactor: 1.15, outdoor: true, robotBoost: false, color: "#556b78" },
+  { id: "structure", name: "Facade & Windows", team: 3, units: 125, baseProductivity: 0.94, plannedDurationFactor: 1.1, outdoor: true, robotBoost: true, color: "#2f6cab" },
+  { id: "envelope", name: "MEP Rough-In", team: 4, units: 95, baseProductivity: 1.03, plannedDurationFactor: 1.2, outdoor: false, robotBoost: true, color: "#d97706" },
+  { id: "mep", name: "Interior Finish", team: 5, units: 145, baseProductivity: 0.84, plannedDurationFactor: 1.35, outdoor: false, robotBoost: false, color: "#0f766e" }
 ];
 
 export const FLOORS = 3;
@@ -23,7 +23,7 @@ const ROBOT_MULTIPLIER = 1.2;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 0.05;
 const TAP_PROGRESS_RATIO = 0.085;
-const PLANNED_PROGRESS_RATIO = 0.058;
+const PLANNED_PRODUCTIVITY_FACTOR = 2.35;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -33,93 +33,37 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
-function deterministicNoise(seed) {
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(index);
-    hash |= 0;
-  }
-  const normalized = Math.abs(Math.sin(hash) * 10000) % 1;
-  return normalized;
-}
-
 function taskId(tradeId, floor) {
   return `${tradeId}-F${floor}`;
 }
 
 function buildPlannedWindows() {
-  const tasks = {};
-  const taskProgress = {};
   const plannedWindows = {};
-  let tick = 0;
-
   for (let floor = 1; floor <= FLOORS; floor += 1) {
-    TRADES.forEach((trade) => {
+    TRADES.forEach((trade, index) => {
       const id = taskId(trade.id, floor);
-      tasks[id] = {
-        id,
-        floor,
-        tradeId: trade.id,
-        team: trade.team,
-        required: trade.units
+      const previousFloorId = floor > 1 ? taskId(trade.id, floor - 1) : null;
+      const predecessorId = index > 0 ? taskId(TRADES[index - 1].id, floor) : null;
+      const previousFloorFinish = previousFloorId ? plannedWindows[previousFloorId].finish : 0;
+      const predecessorFinish = predecessorId ? plannedWindows[predecessorId].finish : 0;
+      const start = Math.max(previousFloorFinish, predecessorFinish);
+
+      // Stable learning curve: higher floors get modestly faster, never random.
+      const learningFactor = Math.max(0.82, 1 - (floor - 1) * 0.07);
+      const duration = Math.max(
+        12,
+        Math.ceil(
+          (trade.units / (trade.baseProductivity * PLANNED_PRODUCTIVITY_FACTOR)) *
+          learningFactor *
+          (trade.plannedDurationFactor || 1)
+        )
+      );
+
+      plannedWindows[id] = {
+        start,
+        finish: start + duration
       };
-      taskProgress[id] = 0;
     });
-  }
-
-  function isTaskEligible(task) {
-    if (taskProgress[task.id] >= task.required) {
-      return false;
-    }
-    const tradeIndex = TRADES.findIndex((trade) => trade.id === task.tradeId);
-    if (task.floor > 1) {
-      const previousFloorId = taskId(task.tradeId, task.floor - 1);
-      if (taskProgress[previousFloorId] < tasks[previousFloorId].required) {
-        return false;
-      }
-    }
-    if (tradeIndex > 0) {
-      const predecessorId = taskId(TRADES[tradeIndex - 1].id, task.floor);
-      if (taskProgress[predecessorId] < tasks[predecessorId].required) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  while (Object.keys(plannedWindows).length < FLOORS * TRADES.length && tick < 5000) {
-    let progressedThisCycle = false;
-
-    TRADES.forEach((trade) => {
-      const candidate = Object.values(tasks)
-        .filter((task) => task.team === trade.team && isTaskEligible(task))
-        .sort((a, b) => a.floor - b.floor)[0];
-
-      if (!candidate) {
-        return;
-      }
-
-      tick += 1;
-      progressedThisCycle = true;
-
-      if (!plannedWindows[candidate.id]) {
-        plannedWindows[candidate.id] = {
-          start: tick
-        };
-      }
-
-      const floorLearningMultiplier = Math.max(0.78, 1 - (candidate.floor - 1) * 0.06);
-      const work = candidate.required * PLANNED_PROGRESS_RATIO / floorLearningMultiplier;
-      taskProgress[candidate.id] = clamp(taskProgress[candidate.id] + work, 0, candidate.required);
-
-      if (taskProgress[candidate.id] >= candidate.required) {
-        plannedWindows[candidate.id].finish = tick;
-      }
-    });
-
-    if (!progressedThisCycle) {
-      break;
-    }
   }
 
   return plannedWindows;
