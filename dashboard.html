@@ -258,7 +258,6 @@
       applyControlToggle,
       getActiveFloor,
       getDashboardMetrics,
-      getTaskPlannedPoints,
       getTaskNodeState,
       getTradeColor,
       makeInitialState,
@@ -409,6 +408,21 @@
       activeFloorEl.textContent = `Active Floor: ${metrics.activeFloor}`;
     }
 
+    function getTaskPlannedPoints(state) {
+      const tasks = Object.values(state.tasks)
+        .sort((a, b) => a.plannedFinishTick - b.plannedFinishTick || a.floor - b.floor || a.team - b.team);
+      const totalRequired = tasks.reduce((sum, task) => sum + task.required, 0);
+      let cumulative = 0;
+
+      return tasks.map((task) => {
+        cumulative += task.required;
+        return {
+          x: task.plannedFinishTick,
+          y: totalRequired ? Math.round((cumulative / totalRequired) * 10000) / 100 : 0
+        };
+      });
+    }
+
     function renderTeamMultipliers(state) {
       teamMultipliersEl.innerHTML = "";
       TRADES.forEach((trade) => {
@@ -425,25 +439,35 @@
     }
 
     async function renderCPM(state) {
-      const floor = getActiveFloor(state);
-      const nodes = TRADES.map((trade) => {
-        const task = state.tasks[`${trade.id}-F${floor}`];
-        const pct = Math.round((task.done / task.required) * 100);
-        const nodeState = getTaskNodeState(task);
-        return `${trade.id}["${trade.name}<br/>Floor ${floor}<br/>${pct}%"]:::${nodeState}`;
-      }).join("\n");
+      const activeFloor = getActiveFloor(state);
+      const blocks = [];
 
-      const links = TRADES.slice(0, -1)
-        .map((trade, index) => `${trade.id} --> ${TRADES[index + 1].id}`)
-        .join("\n");
+      for (let floor = 1; floor <= FLOORS; floor += 1) {
+        const nodes = TRADES.map((trade) => {
+          const task = state.tasks[`${trade.id}-F${floor}`];
+          const pct = Math.round((task.done / task.required) * 100);
+          const nodeState = getTaskNodeState(task);
+          const nodeId = `${trade.id}_F${floor}`;
+          const label = `${trade.name}<br/>F${floor}<br/>${pct}%`;
+          return `${nodeId}["${label}"]:::${nodeState}`;
+        }).join("\n");
+
+        const links = TRADES.slice(0, -1)
+          .map((trade, index) => `${trade.id}_F${floor} --> ${TRADES[index + 1].id}_F${floor}`)
+          .join("\n");
+
+        const floorClass = floor === activeFloor ? "activeFloor" : "normalFloor";
+        blocks.push(`subgraph floor_${floor}["Floor ${floor}"]\n${nodes}\n${links}\nend\nclass floor_${floor} ${floorClass};`);
+      }
 
       const code = `flowchart LR
-${nodes}
-${links}
+${blocks.join("\n")}
 classDef blocked fill:#e5e7eb,stroke:#6b7280,stroke-width:1px,color:#111827;
 classDef ready fill:#bfdbfe,stroke:#1d4ed8,stroke-width:2px,color:#111827;
 classDef active fill:#fde68a,stroke:#b45309,stroke-width:3px,color:#111827;
-classDef complete fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#111827;`;
+classDef complete fill:#bbf7d0,stroke:#15803d,stroke-width:2px,color:#111827;
+classDef activeFloor fill:#fff7ed,stroke:#b45309,stroke-width:2px,color:#111827;
+classDef normalFloor fill:#fffbf5,stroke:#d6d3d1,stroke-width:1px,color:#111827;`;
 
       try {
         mermaidRenderCount += 1;
