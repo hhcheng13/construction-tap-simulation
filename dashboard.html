@@ -21,6 +21,7 @@
     body {
       margin: 0;
       font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 80%;
       background:
         radial-gradient(circle at top, rgba(180, 83, 9, 0.14), transparent 28%),
         linear-gradient(180deg, #f7f2e9 0%, var(--bg) 100%);
@@ -48,7 +49,8 @@
 
     .header-row,
     .control-bar,
-    .kpis {
+    .kpis,
+    .top-summary {
       display: flex;
       gap: 0.45rem;
       align-items: center;
@@ -86,7 +88,8 @@
       color: var(--accent);
     }
 
-    .kpis {
+    .kpis,
+    .top-summary {
       margin-top: 0.5rem;
     }
 
@@ -97,6 +100,15 @@
       border: 1px solid var(--line);
       background: white;
       box-shadow: var(--shadow);
+    }
+
+    .kpi.metric {
+      min-width: 5.35rem;
+    }
+
+    .kpi.trade {
+      min-width: 8.25rem;
+      flex: 1 1 8.25rem;
     }
 
     .kpi-label {
@@ -286,6 +298,11 @@
         min-width: calc(50% - 0.3rem);
       }
 
+      .kpi.trade,
+      .kpi.metric {
+        min-width: calc(50% - 0.3rem);
+      }
+
       .cpm-node-name {
         font-size: 0.62rem;
       }
@@ -314,15 +331,14 @@
       <button id="robot" type="button">Robot Assistance</button>
     </div>
 
-    <div class="kpis" aria-label="Simulation KPIs">
-      <article class="kpi"><div class="kpi-label">Overall Progress</div><div id="overallProgress" class="kpi-value">0%</div></article>
-      <article class="kpi"><div class="kpi-label">Simulation Tick</div><div id="tick" class="kpi-value">0</div></article>
-      <article class="kpi"><div class="kpi-label">Working Crews</div><div id="workingCrews" class="kpi-value">0</div></article>
-      <article class="kpi"><div class="kpi-label">Blocked Crews</div><div id="blockedCrews" class="kpi-value">0</div></article>
-      <article class="kpi"><div class="kpi-label">Completed Tasks</div><div id="completedTasks" class="kpi-value">0</div></article>
+    <div id="topSummary" class="top-summary" aria-label="Simulation summary and team productivity">
+      <article class="kpi metric"><div class="kpi-label">Overall Progress</div><div id="overallProgress" class="kpi-value">0%</div></article>
+      <article class="kpi metric"><div class="kpi-label">Time</div><div id="tick" class="kpi-value">0</div></article>
+      <article class="kpi metric"><div class="kpi-label">Working Crews</div><div id="workingCrews" class="kpi-value">0</div></article>
+      <article class="kpi metric"><div class="kpi-label">Blocked Crews</div><div id="blockedCrews" class="kpi-value">0</div></article>
+      <article class="kpi metric"><div class="kpi-label">Completed Tasks</div><div id="completedTasks" class="kpi-value">0</div></article>
+      <div id="teamMultipliers" class="top-summary" aria-label="Team productivity multipliers"></div>
     </div>
-
-    <div id="teamMultipliers" class="kpis" aria-label="Team productivity multipliers"></div>
   </header>
 
   <main class="page">
@@ -356,7 +372,7 @@
 
     <section class="panel" aria-labelledby="lob-title">
       <h2 id="lob-title">Line of Balance</h2>
-      <p>Trade start and finish lines by simulation tick and floor.</p>
+      <p>Trade start and finish lines by time and floor.</p>
       <div class="chart-wrap"><canvas id="lob"></canvas></div>
     </section>
   </main>
@@ -417,10 +433,17 @@
     let lobChart = null;
     let mermaidRenderCount = 0;
     let autoProgressTimer = null;
+    let fixedTimeAxisMax = 100;
 
     function updateStatus(message, isError = false) {
       statusEl.textContent = message;
       statusEl.classList.toggle("error", isError);
+    }
+
+    function getFixedTimeAxisMax(state) {
+      const tasks = Object.values(state?.tasks || {});
+      const plannedMax = Math.max(...tasks.map((task) => task.plannedFinishTick || 0), 0);
+      return Math.max(100, Math.ceil((plannedMax + 20) / 10) * 10);
     }
 
     function setButtonActive(button, active) {
@@ -530,7 +553,7 @@
       TRADES.forEach((trade) => {
         const team = state.teams[trade.team];
         const card = document.createElement("article");
-        card.className = "kpi";
+        card.className = "kpi trade";
         card.innerHTML = `
           <div class="kpi-label">${trade.name}</div>
           <div class="kpi-value">${team.productivityMultiplier.toFixed(2)}x</div>
@@ -621,7 +644,7 @@
           animation: false,
           scales: {
             x: {
-              title: { display: true, text: "Simulation Tick" }
+              title: { display: true, text: "Time" }
             }
           }
         }
@@ -644,6 +667,8 @@
         }
         return [actualStart, actualFinish];
       });
+      chart.options.scales.x.min = 0;
+      chart.options.scales.x.max = fixedTimeAxisMax;
       chart.update();
     }
 
@@ -678,7 +703,7 @@
           responsive: true,
           animation: false,
           scales: {
-            x: { type: "linear", title: { display: true, text: "Simulation Tick" } },
+            x: { type: "linear", title: { display: true, text: "Time" } },
             y: { min: 0, max: 100, title: { display: true, text: "Cumulative Progress (%)" } }
           }
         }
@@ -696,6 +721,8 @@
 
       chart.data.datasets[0].data = planned;
       chart.data.datasets[1].data = actual;
+      chart.options.scales.x.min = 0;
+      chart.options.scales.x.max = fixedTimeAxisMax;
       chart.update();
     }
 
@@ -710,10 +737,10 @@
           responsive: true,
           animation: false,
           scales: {
-            x: { type: "linear", title: { display: true, text: "Simulation Tick" } },
+            x: { type: "linear", title: { display: true, text: "Time" } },
             y: {
               min: 1,
-              max: FLOORS,
+              max: 4,
               reverse: false,
               ticks: { stepSize: 1 },
               title: { display: true, text: "Floor" }
@@ -791,6 +818,8 @@
           backgroundColor: "#dc2626"
         }
       ];
+      chart.options.scales.x.min = 0;
+      chart.options.scales.x.max = fixedTimeAxisMax;
       chart.update();
     }
 
@@ -802,6 +831,7 @@
       }
 
       latestState = sanitizeState(rawState);
+      fixedTimeAxisMax = getFixedTimeAxisMax(latestState);
       updateStatus(latestState.running ? "Simulation running" : latestState.tick > 0 ? "Simulation paused" : "Initialized and waiting to start");
       syncAutoProgressLoop(latestState);
       renderControls(latestState);
