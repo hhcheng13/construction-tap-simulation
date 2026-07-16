@@ -329,8 +329,12 @@ function normalizeTask(rawTask, trade, floor) {
   safeTask.floor = floor;
   safeTask.required = Number.isFinite(Number(safeTask.required)) ? Number(safeTask.required) : trade.units;
   safeTask.done = clamp(Number(safeTask.done) || 0, 0, safeTask.required);
-  safeTask.startTick = Number.isFinite(Number(safeTask.startTick)) ? Number(safeTask.startTick) : null;
-  safeTask.finishTick = Number.isFinite(Number(safeTask.finishTick)) ? Number(safeTask.finishTick) : null;
+  safeTask.startTick = Number.isFinite(Number(safeTask.startTick)) && Number(safeTask.startTick) > 0
+    ? Number(safeTask.startTick)
+    : null;
+  safeTask.finishTick = Number.isFinite(Number(safeTask.finishTick)) && Number(safeTask.finishTick) > 0
+    ? Number(safeTask.finishTick)
+    : null;
   safeTask.plannedStartTick = Number.isFinite(Number(safeTask.plannedStartTick)) ? Number(safeTask.plannedStartTick) : safeTask.plannedStartTick;
   safeTask.plannedFinishTick = Number.isFinite(Number(safeTask.plannedFinishTick)) ? Number(safeTask.plannedFinishTick) : safeTask.plannedFinishTick;
   safeTask.latestWork = round(Number(safeTask.latestWork) || 0);
