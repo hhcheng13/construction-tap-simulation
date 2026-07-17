@@ -687,17 +687,42 @@
       return ganttChart;
     }
 
-    function getActualDisplayStartTick(task) {
+    function getActualDisplayStartTick(task, state) {
       const actualStart = Number.isFinite(task?.startTick) && task.startTick >= 0 ? task.startTick : null;
       if (actualStart === null) {
         return null;
       }
 
-      return task.plannedStartTick === 0 ? 0 : actualStart;
+      if (task.plannedStartTick === 0) {
+        return 0;
+      }
+
+      const dependencyFinishes = [];
+      if (task.floor > 1) {
+        const previousFloorTask = state?.tasks?.[`${task.tradeId}-F${task.floor - 1}`];
+        if (Number.isFinite(previousFloorTask?.finishTick) && previousFloorTask.finishTick >= 0) {
+          dependencyFinishes.push(previousFloorTask.finishTick);
+        }
+      }
+
+      const tradeIndex = TRADES.findIndex((trade) => trade.id === task.tradeId);
+      if (tradeIndex > 0) {
+        const predecessorTask = state?.tasks?.[`${TRADES[tradeIndex - 1].id}-F${task.floor}`];
+        if (Number.isFinite(predecessorTask?.finishTick) && predecessorTask.finishTick >= 0) {
+          dependencyFinishes.push(predecessorTask.finishTick);
+        }
+      }
+
+      const displayAnchor = dependencyFinishes.length ? Math.max(...dependencyFinishes) : null;
+      if (displayAnchor !== null && actualStart - displayAnchor <= 1) {
+        return displayAnchor;
+      }
+
+      return actualStart;
     }
 
     function getActualDisplayEndTick(task, state) {
-      const actualStart = getActualDisplayStartTick(task);
+      const actualStart = getActualDisplayStartTick(task, state);
       if (actualStart === null) {
         return null;
       }
@@ -716,7 +741,7 @@
       chart.data.labels = tasks.map((task) => `F${task.floor} ${task.tradeName}`);
       chart.data.datasets[0].data = tasks.map((task) => [task.plannedStartTick, task.plannedFinishTick]);
       chart.data.datasets[1].data = tasks.map((task) => {
-        const actualStart = getActualDisplayStartTick(task);
+        const actualStart = getActualDisplayStartTick(task, state);
         const actualFinish = getActualDisplayEndTick(task, state);
         if (actualStart === null) {
           return null;

@@ -36,7 +36,7 @@ function round(value) {
 }
 
 function sampleAutoProgressFactor() {
-  return round(0.88 + Math.random() * 0.14);
+  return round(0.9 + Math.random() * 0.12);
 }
 
 function taskId(tradeId, floor) {
