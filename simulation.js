@@ -34,6 +34,10 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
+function sampleAutoProgressFactor() {
+  return round(0.88 + Math.random() * 0.14);
+}
+
 function taskId(tradeId, floor) {
   return `${tradeId}-F${floor}`;
 }
@@ -135,7 +139,8 @@ function makeTask(trade, floor, plannedStart, plannedDuration) {
     finishTick: null,
     plannedStartTick: plannedStart,
     plannedFinishTick: plannedStart + plannedDuration,
-    latestWork: 0
+    latestWork: 0,
+    autoProgressFactor: sampleAutoProgressFactor()
   };
 }
 
@@ -416,6 +421,9 @@ function normalizeTask(rawTask, trade, floor, controls) {
   safeTask.plannedStartTick = Number.isFinite(Number(safeTask.plannedStartTick)) ? Number(safeTask.plannedStartTick) : safeTask.plannedStartTick;
   safeTask.plannedFinishTick = Number.isFinite(Number(safeTask.plannedFinishTick)) ? Number(safeTask.plannedFinishTick) : safeTask.plannedFinishTick;
   safeTask.latestWork = round(Number(safeTask.latestWork) || 0);
+  safeTask.autoProgressFactor = Number.isFinite(Number(safeTask.autoProgressFactor))
+    ? clamp(Number(safeTask.autoProgressFactor), 0.5, 1.5)
+    : sampleAutoProgressFactor();
   return safeTask;
 }
 
@@ -613,8 +621,8 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress should usually trail plan slightly unless taps help recover time.
-    variabilityMultiplier = round(0.88 + Math.random() * 0.14);
+    // Each task carries its own persistent actual-performance profile.
+    variabilityMultiplier = candidate.autoProgressFactor || sampleAutoProgressFactor();
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
     // Manual taps should never feel worse than doing nothing, so clamp to a non-negative boost.
