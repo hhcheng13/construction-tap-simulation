@@ -556,8 +556,8 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress should trail the planned baseline by only 0% to 10%.
-    variabilityMultiplier = round(0.9 + Math.random() * 0.1);
+    // Auto progress varies around the planned baseline, from about 6% faster to 12% slower.
+    variabilityMultiplier = round(0.89 + Math.random() * 0.17);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
     const varianceRange = [0.9, 1.18];
