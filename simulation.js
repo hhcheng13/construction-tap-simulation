@@ -298,6 +298,9 @@ export function isEligible(state, task) {
     if (!predecessorTask || predecessorTask.done < predecessorTask.required) {
       return false;
     }
+    if (!Number.isFinite(predecessorTask.finishTick) || predecessorTask.finishTick >= state.tick) {
+      return false;
+    }
   }
 
   return true;
