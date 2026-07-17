@@ -607,13 +607,13 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress varies around the baseline by -15% to +25%.
-    variabilityMultiplier = round(0.85 + Math.random() * 0.4);
+    // Auto progress varies by a positive 5% to 25% boost.
+    variabilityMultiplier = round(1.05 + Math.random() * 0.2);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
     // Manual taps should never feel worse than doing nothing, so clamp to a non-negative boost.
     appliedMultiplier = Math.max(1, robotMultiplier);
-    const varianceRange = [1, 1.25];
+    const varianceRange = [1.05, 1.25];
     const calculated = calculateWorkAmount(
       candidate,
       baseRatio,
