@@ -51,6 +51,10 @@ function getPlannedProjectDurationTicks(state) {
   return Math.max(1, ...tasks.map((task) => task.plannedFinishTick || 0));
 }
 
+function getTotalRequiredWork(state) {
+  return Object.values(state?.tasks || {}).reduce((sum, task) => sum + (task.required || 0), 0);
+}
+
 function getPlannedDuration(trade, floor) {
   const floorIndex = Math.max(0, floor - 1);
   const learningFactor = FLOOR_LEARNING_REDUCTION[floorIndex] ?? FLOOR_LEARNING_REDUCTION.at(-1) ?? 0.8;
@@ -680,13 +684,78 @@ export function applyAutoProgress(rawState, now = Date.now()) {
 
   for (let step = 0; step < steps; step += 1) {
     state.tick += 1;
-    TRADES.forEach((trade) => {
-      applyWorkToTask(state, trade.team, "auto", AUTO_PROGRESS_RATIO, { incrementTick: false });
+    updateStatuses(state);
+
+    const simTime = Math.max(1, Number(state.controls?.simTime || state.environment?.simTime || 30));
+    const totalRequiredWork = getTotalRequiredWork(state);
+    const eligibleTasks = Object.values(state.tasks)
+      .filter((task) => isEligible(state, task) && task.done < task.required)
+      .sort((a, b) => a.floor - b.floor || a.team - b.team);
+
+    if (!eligibleTasks.length) {
+      continue;
+    }
+
+    // One global work budget per second keeps total project duration near simTime.
+    const globalBudget = round((totalRequiredWork / simTime) * (0.94 + Math.random() * 0.18));
+    const totalWeight = eligibleTasks.reduce((sum, task) => sum + task.required, 0) || 1;
+
+    eligibleTasks.forEach((task, index) => {
+      const trade = getTradeByTeam(task.team);
+      const team = state.teams?.[task.team];
+      if (!trade || !team) {
+        return;
+      }
+
+      const fatigueMultiplier = calculateFatigueMultiplier(team, state.controls);
+      const rainMultiplier = calculateRainMultiplier(trade, state.environment);
+      const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
+      const phaseMultiplier = calculatePhaseMultiplier(state);
+      const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier * phaseMultiplier;
+      const taskBudget = globalBudget * (task.required / totalWeight);
+      const work = clamp(
+        round(taskBudget * totalMultiplier),
+        0,
+        task.required - task.done
+      );
+
+      if (work <= 0) {
+        return;
+      }
+
+      if (task.startTick === null) {
+        task.startTick = state.tick;
+      }
+
+      team.lastTapTick = state.tick;
+      team.variabilityMultiplier = 1;
+      team.fatigueMultiplier = round(fatigueMultiplier);
+      team.rainMultiplier = round(rainMultiplier);
+      team.robotMultiplier = round(robotMultiplier);
+      team.productivityMultiplier = round(totalMultiplier);
+      team.effectiveWork = round(team.effectiveWork + work);
+
+      task.done = clamp(round(task.done + work), 0, task.required);
+      task.latestWork = work;
+
+      if (task.done >= task.required) {
+        task.finishTick = state.tick;
+        appendEvent(state, "complete", `${trade.name} finished Floor ${task.floor}`, {
+          team: task.team,
+          taskId: task.id,
+          source: "auto"
+        });
+      } else if (index === 0) {
+        appendEvent(state, "auto", `${trade.name} progressed on Floor ${task.floor}`, {
+          team: task.team,
+          taskId: task.id,
+          work
+        });
+      }
     });
   }
 
   state.lastAutoProgressAt = lastAutoProgressAt + steps * AUTO_PROGRESS_INTERVAL_MS;
-  appendEvent(state, "auto", `Automatic progress advanced ${steps} step(s)`);
   updateStatuses(state);
   appendHistory(state);
   return state;
