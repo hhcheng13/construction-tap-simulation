@@ -164,7 +164,8 @@ export function makeInitialState() {
     controls: {
       fatigueEnabled: true,
       rainEnabled: false,
-      robotEnabled: false
+      robotEnabled: false,
+      simTime: 30
     },
     environment: {
       rainActive: false,
@@ -223,7 +224,9 @@ function calculateRobotMultiplier(trade, environment) {
   if (!environment?.robotAssistanceActive || !trade?.robotBoost) {
     return 1;
   }
-  return ROBOT_MULTIPLIER;
+  const simTime = Number(environment?.simTime) || 30;
+  const timeFactor = 30 / Math.max(1, simTime);
+  return round(ROBOT_MULTIPLIER * timeFactor);
 }
 
 function getProgressPct(task) {
@@ -509,6 +512,17 @@ export function applyControlToggle(rawState, controlKey, active) {
     state.environment.robotAssistanceActive = Boolean(active);
   }
   appendEvent(state, "control", `${controlKey} ${active ? "enabled" : "disabled"}`);
+  updateStatuses(state);
+  appendHistory(state);
+  return state;
+}
+
+export function setSimTime(rawState, simTime) {
+  const state = sanitizeState(rawState);
+  const safeSimTime = Math.max(1, Math.round(Number(simTime) || 30));
+  state.controls.simTime = safeSimTime;
+  state.environment.simTime = safeSimTime;
+  appendEvent(state, "control", `simTime set to ${safeSimTime}`);
   updateStatuses(state);
   appendHistory(state);
   return state;
