@@ -687,7 +687,7 @@
       return ganttChart;
     }
 
-    function getProjectedActualFinishTick(task, state) {
+    function getActualDisplayEndTick(task, state) {
       const actualStart = Number.isFinite(task?.startTick) && task.startTick > 0 ? task.startTick : null;
       if (actualStart === null) {
         return null;
@@ -696,17 +696,7 @@
       if (Number.isFinite(task.finishTick) && task.finishTick > 0) {
         return task.finishTick;
       }
-
-      const done = Number(task.done) || 0;
-      const required = Math.max(1, Number(task.required) || 1);
-      const progressRatio = done / required;
-      if (progressRatio <= 0) {
-        return state.tick;
-      }
-
-      const elapsed = Math.max(1, state.tick - actualStart);
-      const projectedDuration = elapsed / progressRatio;
-      return Math.max(state.tick, Math.round(actualStart + projectedDuration));
+      return Math.max(state.tick, actualStart);
     }
 
     function renderGantt(state) {
@@ -718,7 +708,7 @@
       chart.data.datasets[0].data = tasks.map((task) => [task.plannedStartTick, task.plannedFinishTick]);
       chart.data.datasets[1].data = tasks.map((task) => {
         const actualStart = Number.isFinite(task.startTick) && task.startTick > 0 ? task.startTick : null;
-        const actualFinish = getProjectedActualFinishTick(task, state);
+        const actualFinish = getActualDisplayEndTick(task, state);
         if (actualStart === null) {
           return null;
         }
@@ -823,7 +813,7 @@
             x: task.plannedFinishTick,
             y: floor
           });
-          const finishTick = getProjectedActualFinishTick(task, state);
+          const finishTick = Number.isFinite(task.finishTick) && task.finishTick > 0 ? task.finishTick : null;
 
           if (finishTick !== null) {
             actualFinishPoints.push({

@@ -607,8 +607,8 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress varies by a positive 5% to 25% boost.
-    variabilityMultiplier = round(1.05 + Math.random() * 0.2);
+    // Auto progress should cluster around plan but usually land a bit slower.
+    variabilityMultiplier = round(0.95 + Math.random() * 0.2);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
     // Manual taps should never feel worse than doing nothing, so clamp to a non-negative boost.
