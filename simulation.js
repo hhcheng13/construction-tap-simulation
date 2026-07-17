@@ -23,7 +23,7 @@ const ROBOT_MULTIPLIER = 1.5;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 1;
 const TAP_PROGRESS_RATIO = 0.052;
-const PLANNED_PRODUCTIVITY_FACTOR = 2.35;
+const DEFAULT_PLANNED_PRODUCTIVITY_FACTOR = 2.35;
 const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
 
 function clamp(value, min, max) {
@@ -45,24 +45,31 @@ function getPlannedDurationTicks(task) {
 function getPlannedWorkPerTick(task) {
   return task.required / getPlannedDurationTicks(task);
 }
-function getPlannedDuration(trade, floor) {
+
+function getPlannedProductivityFactor(source) {
+  const value = Number(source?.controls?.plannedProductivityFactor ?? source?.plannedProductivityFactor);
+  return clamp(Number.isFinite(value) ? value : DEFAULT_PLANNED_PRODUCTIVITY_FACTOR, 0.2, 20);
+}
+
+function getPlannedDuration(trade, floor, productivityFactor = DEFAULT_PLANNED_PRODUCTIVITY_FACTOR) {
   const floorIndex = Math.max(0, floor - 1);
   const learningFactor = FLOOR_LEARNING_REDUCTION[floorIndex] ?? FLOOR_LEARNING_REDUCTION.at(-1) ?? 0.8;
-  const baseDuration = trade.units / (trade.baseProductivity * PLANNED_PRODUCTIVITY_FACTOR);
+  const baseDuration = trade.units / (trade.baseProductivity * productivityFactor);
   return Math.max(
     12,
     Math.ceil(baseDuration * (trade.plannedDurationFactor || 1) * learningFactor)
   );
 }
 
-function buildPlannedWindows() {
+function buildPlannedWindows(source) {
+  const productivityFactor = getPlannedProductivityFactor(source);
   const plannedWindows = {};
   const plannedDurationsByTrade = {};
 
   TRADES.forEach((trade) => {
     plannedDurationsByTrade[trade.id] = [];
     for (let floor = 1; floor <= FLOORS; floor += 1) {
-      const proposedDuration = getPlannedDuration(trade, floor);
+      const proposedDuration = getPlannedDuration(trade, floor, productivityFactor);
       const previousDuration = plannedDurationsByTrade[trade.id][floor - 2];
       const safeDuration = previousDuration
         ? Math.min(previousDuration, proposedDuration)
@@ -135,7 +142,13 @@ function makeTask(trade, floor, plannedStart, plannedDuration) {
 export function makeInitialState() {
   const tasks = {};
   const teams = {};
-  const plannedWindows = buildPlannedWindows();
+  const controls = {
+    fatigueEnabled: true,
+    rainEnabled: false,
+    robotEnabled: false,
+    plannedProductivityFactor: DEFAULT_PLANNED_PRODUCTIVITY_FACTOR
+  };
+  const plannedWindows = buildPlannedWindows({ controls });
 
   for (let floor = 1; floor <= FLOORS; floor += 1) {
     TRADES.forEach((trade) => {
@@ -160,11 +173,7 @@ export function makeInitialState() {
     tick: 0,
     startedAt: null,
     lastAutoProgressAt: null,
-    controls: {
-      fatigueEnabled: true,
-      rainEnabled: false,
-      robotEnabled: false
-    },
+    controls,
     environment: {
       rainActive: false,
       robotAssistanceActive: false
@@ -373,8 +382,8 @@ export function getTaskPlannedPoints(state) {
   });
 }
 
-function normalizeTask(rawTask, trade, floor) {
-  const plannedWindows = buildPlannedWindows();
+function normalizeTask(rawTask, trade, floor, controls) {
+  const plannedWindows = buildPlannedWindows({ controls });
   const plannedWindow = plannedWindows[taskId(trade.id, floor)];
   const fallbackPlannedStart = plannedWindow?.start ?? 0;
   const plannedDuration = Math.max(1, (plannedWindow?.finish ?? 1) - fallbackPlannedStart);
@@ -398,6 +407,22 @@ function normalizeTask(rawTask, trade, floor) {
   safeTask.plannedFinishTick = Number.isFinite(Number(safeTask.plannedFinishTick)) ? Number(safeTask.plannedFinishTick) : safeTask.plannedFinishTick;
   safeTask.latestWork = round(Number(safeTask.latestWork) || 0);
   return safeTask;
+}
+
+function reapplyPlannedWindows(state) {
+  const plannedWindows = buildPlannedWindows(state);
+  for (let floor = 1; floor <= FLOORS; floor += 1) {
+    TRADES.forEach((trade) => {
+      const id = taskId(trade.id, floor);
+      const task = state.tasks?.[id];
+      const window = plannedWindows[id];
+      if (!task || !window) {
+        return;
+      }
+      task.plannedStartTick = window.start;
+      task.plannedFinishTick = window.finish;
+    });
+  }
 }
 
 export function sanitizeState(rawState) {
@@ -430,6 +455,7 @@ export function sanitizeState(rawState) {
   safeState.lastAutoProgressAt = Number.isFinite(Number(rawState.lastAutoProgressAt))
     ? Number(rawState.lastAutoProgressAt)
     : null;
+  safeState.controls.plannedProductivityFactor = getPlannedProductivityFactor(safeState);
 
   TRADES.forEach((trade) => {
     const rawTeam = rawState.teams?.[trade.team] || rawState.teams?.[String(trade.team)] || {};
@@ -449,7 +475,7 @@ export function sanitizeState(rawState) {
   for (let floor = 1; floor <= FLOORS; floor += 1) {
     TRADES.forEach((trade) => {
       const id = taskId(trade.id, floor);
-      safeState.tasks[id] = normalizeTask(rawState.tasks?.[id], trade, floor);
+      safeState.tasks[id] = normalizeTask(rawState.tasks?.[id], trade, floor, safeState.controls);
     });
   }
 
@@ -508,6 +534,20 @@ export function applyControlToggle(rawState, controlKey, active) {
     state.environment.robotAssistanceActive = Boolean(active);
   }
   appendEvent(state, "control", `${controlKey} ${active ? "enabled" : "disabled"}`);
+  updateStatuses(state);
+  appendHistory(state);
+  return state;
+}
+
+export function setPlannedProductivityFactor(rawState, factor) {
+  const state = sanitizeState(rawState);
+  state.controls.plannedProductivityFactor = clamp(
+    Math.round((Number(factor) || DEFAULT_PLANNED_PRODUCTIVITY_FACTOR) * 100) / 100,
+    0.2,
+    20
+  );
+  reapplyPlannedWindows(state);
+  appendEvent(state, "control", `planned productivity factor set to ${state.controls.plannedProductivityFactor}`);
   updateStatuses(state);
   appendHistory(state);
   return state;
