@@ -535,7 +535,7 @@ function calculateWorkAmount(task, baseRatio, totalMultiplier, varianceMin, vari
   return { variabilityMultiplier, work: clamp(work, 0, task.required) };
 }
 
-function applyWorkToTask(state, teamNumber, source, baseRatio) {
+function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   const team = state.teams?.[teamNumber];
   const trade = getTradeByTeam(teamNumber);
   const candidate = getCandidateTask(state, teamNumber);
@@ -544,7 +544,9 @@ function applyWorkToTask(state, teamNumber, source, baseRatio) {
     return false;
   }
 
-  state.tick += 1;
+  if (options.incrementTick !== false) {
+    state.tick += 1;
+  }
 
   const fatigueMultiplier = calculateFatigueMultiplier(team, state.controls);
   const rainMultiplier = calculateRainMultiplier(trade, state.environment);
@@ -656,8 +658,9 @@ export function applyAutoProgress(rawState, now = Date.now()) {
   }
 
   for (let step = 0; step < steps; step += 1) {
+    state.tick += 1;
     TRADES.forEach((trade) => {
-      applyWorkToTask(state, trade.team, "auto", AUTO_PROGRESS_RATIO);
+      applyWorkToTask(state, trade.team, "auto", AUTO_PROGRESS_RATIO, { incrementTick: false });
     });
   }
 
