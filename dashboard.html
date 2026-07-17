@@ -687,8 +687,17 @@
       return ganttChart;
     }
 
-    function getActualDisplayEndTick(task, state) {
+    function getActualDisplayStartTick(task) {
       const actualStart = Number.isFinite(task?.startTick) && task.startTick >= 0 ? task.startTick : null;
+      if (actualStart === null) {
+        return null;
+      }
+
+      return task.plannedStartTick === 0 ? 0 : actualStart;
+    }
+
+    function getActualDisplayEndTick(task, state) {
+      const actualStart = getActualDisplayStartTick(task);
       if (actualStart === null) {
         return null;
       }
@@ -707,7 +716,7 @@
       chart.data.labels = tasks.map((task) => `F${task.floor} ${task.tradeName}`);
       chart.data.datasets[0].data = tasks.map((task) => [task.plannedStartTick, task.plannedFinishTick]);
       chart.data.datasets[1].data = tasks.map((task) => {
-        const actualStart = Number.isFinite(task.startTick) && task.startTick >= 0 ? task.startTick : null;
+        const actualStart = getActualDisplayStartTick(task);
         const actualFinish = getActualDisplayEndTick(task, state);
         if (actualStart === null) {
           return null;
