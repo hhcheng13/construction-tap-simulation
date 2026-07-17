@@ -606,11 +606,11 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress varies symmetrically around the planned baseline by +/-15%.
-    variabilityMultiplier = round(0.85 + Math.random() * 0.3);
+    // Auto progress varies around the baseline by -15% to +25%.
+    variabilityMultiplier = round(0.85 + Math.random() * 0.4);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
-    const varianceRange = [0.85, 1.15];
+    const varianceRange = [0.85, 1.25];
     const calculated = calculateWorkAmount(
       candidate,
       baseRatio,

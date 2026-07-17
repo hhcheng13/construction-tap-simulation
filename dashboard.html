@@ -758,16 +758,6 @@
       }));
       const planned = getTaskPlannedPoints(state);
 
-      if (actual.length) {
-        const lastPoint = actual[actual.length - 1];
-        if (lastPoint.x < fixedTimeAxisMax) {
-          actual.push({
-            x: fixedTimeAxisMax,
-            y: lastPoint.y
-          });
-        }
-      }
-
       chart.data.datasets[0].data = planned;
       chart.data.datasets[1].data = actual;
       chart.options.scales.x.min = 0;
