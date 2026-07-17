@@ -668,7 +668,10 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
 }
 
 export function applyTap(rawState, teamNumber) {
-  const state = sanitizeState(rawState);
+  let state = sanitizeState(rawState);
+  if (state.running && !isProjectComplete(state)) {
+    state = applyAutoProgress(state, Date.now());
+  }
   const team = state.teams?.[teamNumber];
   const trade = getTradeByTeam(teamNumber);
 
