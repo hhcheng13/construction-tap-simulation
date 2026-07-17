@@ -861,14 +861,20 @@
 
           if (floor > 1) {
             const previousFloorTask = state.tasks[`${trade.id}-F${floor - 1}`];
-            if (previousFloorTask?.finishTick && task.startTick < previousFloorTask.finishTick) {
+            const previousFloorFinish = Number.isFinite(previousFloorTask?.finishTick)
+              ? previousFloorTask.finishTick
+              : null;
+            if (previousFloorFinish !== null && task.startTick <= previousFloorFinish) {
               collisionPoints.push({ x: task.startTick, y: floor });
             }
           }
 
           if (tradeIndex > 0) {
             const predecessorTask = state.tasks[`${TRADES[tradeIndex - 1].id}-F${floor}`];
-            if (predecessorTask?.finishTick && task.startTick < predecessorTask.finishTick) {
+            const predecessorFinish = Number.isFinite(predecessorTask?.finishTick)
+              ? predecessorTask.finishTick
+              : null;
+            if (predecessorFinish !== null && task.startTick <= predecessorFinish) {
               collisionPoints.push({ x: task.startTick, y: floor });
             }
           }
