@@ -686,7 +686,7 @@ export function applyTap(rawState, teamNumber) {
   }
 
   team.validTaps += 1;
-  applyWorkToTask(state, teamNumber, "tap", TAP_PROGRESS_RATIO);
+  applyWorkToTask(state, teamNumber, "tap", TAP_PROGRESS_RATIO, { incrementTick: false });
 
   if (isProjectComplete(state)) {
     state.running = false;
