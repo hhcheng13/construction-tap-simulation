@@ -45,16 +45,6 @@ function getPlannedDurationTicks(task) {
 function getPlannedWorkPerTick(task) {
   return task.required / getPlannedDurationTicks(task);
 }
-
-function getPlannedProjectDurationTicks(state) {
-  const tasks = Object.values(state?.tasks || {});
-  return Math.max(1, ...tasks.map((task) => task.plannedFinishTick || 0));
-}
-
-function getTotalRequiredWork(state) {
-  return Object.values(state?.tasks || {}).reduce((sum, task) => sum + (task.required || 0), 0);
-}
-
 function getPlannedDuration(trade, floor) {
   const floorIndex = Math.max(0, floor - 1);
   const learningFactor = FLOOR_LEARNING_REDUCTION[floorIndex] ?? FLOOR_LEARNING_REDUCTION.at(-1) ?? 0.8;
@@ -173,8 +163,7 @@ export function makeInitialState() {
     controls: {
       fatigueEnabled: true,
       rainEnabled: false,
-      robotEnabled: false,
-      simTime: 30
+      robotEnabled: false
     },
     environment: {
       rainActive: false,
@@ -524,17 +513,6 @@ export function applyControlToggle(rawState, controlKey, active) {
   return state;
 }
 
-export function setSimTime(rawState, simTime) {
-  const state = sanitizeState(rawState);
-  const safeSimTime = Math.max(1, Math.round(Number(simTime) || 30));
-  state.controls.simTime = safeSimTime;
-  state.environment.simTime = safeSimTime;
-  appendEvent(state, "control", `simTime set to ${safeSimTime}`);
-  updateStatuses(state);
-  appendHistory(state);
-  return state;
-}
-
 export function setRunning(rawState, running) {
   const state = sanitizeState(rawState);
   state.running = Boolean(running);
@@ -578,14 +556,9 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Global simTime means "project reaches 100% in about simTime seconds" when nobody taps.
-    // Auto variability targets roughly 6% faster to 12% slower project duration.
-    // Since work rate is inverse to duration, convert that range into a work multiplier.
-    const simTime = Math.max(1, Number(state.controls?.simTime || state.environment?.simTime || 30));
-    const plannedProjectTicks = getPlannedProjectDurationTicks(state);
-    const globalTimeScale = plannedProjectTicks / simTime;
-    variabilityMultiplier = round(0.89 + Math.random() * 0.17);
-    work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * globalTimeScale * variabilityMultiplier);
+    // Auto progress should trail the planned baseline by only 0% to 10%.
+    variabilityMultiplier = round(0.9 + Math.random() * 0.1);
+    work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
     const varianceRange = [0.9, 1.18];
     const calculated = calculateWorkAmount(
