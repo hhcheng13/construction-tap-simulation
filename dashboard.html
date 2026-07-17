@@ -349,7 +349,7 @@
       <button id="start" type="button">Start</button>
       <button id="pause" type="button">Pause</button>
       <button id="fatigue" type="button">Fatigue</button>
-      <button id="rain" type="button">Rain</button>
+      <button id="learning" type="button">Learning</button>
       <button id="robot" type="button">Robot Assistance</button>
       <label class="control-inline" for="plannedFactor">
         <span>S</span>
@@ -446,7 +446,7 @@
       start: document.querySelector("#start"),
       pause: document.querySelector("#pause"),
       fatigue: document.querySelector("#fatigue"),
-      rain: document.querySelector("#rain"),
+      learning: document.querySelector("#learning"),
       robot: document.querySelector("#robot")
     };
     const plannedFactorInput = document.querySelector("#plannedFactor");
@@ -540,9 +540,9 @@
       }
     });
 
-    controlButtons.rain.addEventListener("click", async () => {
+    controlButtons.learning.addEventListener("click", async () => {
       try {
-        await updateStateTransaction((state) => applyControlToggle(state || makeInitialState(), "rainEnabled", !(sanitizeState(state || makeInitialState()).environment.rainActive)));
+        await updateStateTransaction((state) => applyControlToggle(state || makeInitialState(), "learningEnabled", !(sanitizeState(state || makeInitialState()).environment.learningActive)));
       } catch (error) {
         updateStatus(`Firebase unavailable: ${error.message}`, true);
       }
@@ -568,7 +568,7 @@
 
     function renderControls(state) {
       setButtonActive(controlButtons.fatigue, state.controls.fatigueEnabled);
-      setButtonActive(controlButtons.rain, state.environment.rainActive);
+      setButtonActive(controlButtons.learning, state.environment.learningActive);
       setButtonActive(controlButtons.robot, state.environment.robotAssistanceActive);
       plannedFactorInput.value = String(state.controls?.plannedProductivityFactor ?? 10);
     }
@@ -592,7 +592,7 @@
         card.innerHTML = `
           <div class="kpi-label">${trade.name}</div>
           <div class="kpi-value">${team.productivityMultiplier.toFixed(2)}x</div>
-          <div class="kpi-label">Fatigue ${team.fatigueMultiplier.toFixed(2)}x | Rain ${team.rainMultiplier.toFixed(2)}x | Robot ${team.robotMultiplier.toFixed(2)}x</div>
+          <div class="kpi-label">Fatigue ${team.fatigueMultiplier.toFixed(2)}x | Learning ${team.learningMultiplier.toFixed(2)}x | Robot ${team.robotMultiplier.toFixed(2)}x</div>
         `;
         teamMultipliersEl.appendChild(card);
       });

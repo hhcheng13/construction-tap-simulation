@@ -18,13 +18,14 @@ export const STATUS = {
 };
 
 const HISTORY_LIMIT = 240;
-const RAIN_MULTIPLIER = 0.78;
 const ROBOT_MULTIPLIER = 1.5;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 1;
 const TAP_PROGRESS_RATIO = 0.052;
 const DEFAULT_PLANNED_PRODUCTIVITY_FACTOR = 10;
 const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
+const TEAM_LEARNING_MAX_BOOST = 1.3;
+const TEAM_LEARNING_WORK_SPAN = 240;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -118,7 +119,7 @@ function makeTeamState(trade) {
     progressPct: 0,
     productivityMultiplier: 1,
     variabilityMultiplier: 1,
-    rainMultiplier: 1,
+    learningMultiplier: 1,
     robotMultiplier: 1,
     fatigueMultiplier: 1,
     status: STATUS.WAITING
@@ -149,7 +150,7 @@ export function makeInitialState() {
   const teams = {};
   const controls = {
     fatigueEnabled: true,
-    rainEnabled: false,
+    learningEnabled: false,
     robotEnabled: false,
     plannedProductivityFactor: DEFAULT_PLANNED_PRODUCTIVITY_FACTOR
   };
@@ -180,7 +181,7 @@ export function makeInitialState() {
     lastAutoProgressAt: null,
     controls,
     environment: {
-      rainActive: false,
+      learningActive: false,
       robotAssistanceActive: false
     },
     teams,
@@ -225,11 +226,13 @@ function calculateFatigueMultiplier(teamState, controls) {
   return clamp(1 - sustained * 0.012, 0.62, 1);
 }
 
-function calculateRainMultiplier(trade, environment) {
-  if (!environment?.rainActive || !trade?.outdoor) {
+function calculateLearningMultiplier(teamState, controls, environment) {
+  if (!controls?.learningEnabled && !environment?.learningActive) {
     return 1;
   }
-  return RAIN_MULTIPLIER;
+  const effectiveWork = Math.max(0, Number(teamState?.effectiveWork) || 0);
+  const learningProgress = clamp(effectiveWork / TEAM_LEARNING_WORK_SPAN, 0, 1);
+  return round(1 + (TEAM_LEARNING_MAX_BOOST - 1) * learningProgress);
 }
 
 function calculateRobotMultiplier(trade, environment) {
@@ -476,6 +479,12 @@ export function sanitizeState(rawState) {
   safeState.lastAutoProgressAt = Number.isFinite(Number(rawState.lastAutoProgressAt))
     ? Number(rawState.lastAutoProgressAt)
     : null;
+  if (!safeState.controls.learningEnabled && safeState.controls.rainEnabled) {
+    safeState.controls.learningEnabled = Boolean(safeState.controls.rainEnabled);
+  }
+  if (!safeState.environment.learningActive && safeState.environment.rainActive) {
+    safeState.environment.learningActive = Boolean(safeState.environment.rainActive);
+  }
   safeState.controls.plannedProductivityFactor = getPlannedProductivityFactor(safeState);
 
   TRADES.forEach((trade) => {
@@ -522,9 +531,9 @@ export function updateStatuses(state) {
     const candidate = getCandidateTask(state, trade.team);
     const fallback = candidate || getFallbackTask(state, trade.team);
     const fatigueMultiplier = calculateFatigueMultiplier(team, state.controls);
-    const rainMultiplier = calculateRainMultiplier(trade, state.environment);
+    const learningMultiplier = calculateLearningMultiplier(team, state.controls, state.environment);
     const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
-    const productivityMultiplier = round(fatigueMultiplier * rainMultiplier * robotMultiplier * (team.variabilityMultiplier || 1));
+    const productivityMultiplier = round(fatigueMultiplier * learningMultiplier * robotMultiplier * (team.variabilityMultiplier || 1));
     const task = fallback;
 
     team.currentTaskId = task?.id || null;
@@ -532,7 +541,7 @@ export function updateStatuses(state) {
     team.currentActivity = task ? `${task.tradeName} Floor ${task.floor}` : `${trade.name} complete`;
     team.progressPct = task ? getProgressPct(task) : 100;
     team.fatigueMultiplier = round(fatigueMultiplier);
-    team.rainMultiplier = round(rainMultiplier);
+    team.learningMultiplier = round(learningMultiplier);
     team.robotMultiplier = round(robotMultiplier);
     team.productivityMultiplier = round(productivityMultiplier);
     team.status = summarizeTeamStatus(state, trade.team, candidate);
@@ -552,9 +561,9 @@ export function applyControlToggle(rawState, controlKey, active) {
   if (controlKey === "fatigueEnabled") {
     state.controls.fatigueEnabled = Boolean(active);
   }
-  if (controlKey === "rainEnabled") {
-    state.controls.rainEnabled = Boolean(active);
-    state.environment.rainActive = Boolean(active);
+  if (controlKey === "learningEnabled" || controlKey === "rainEnabled") {
+    state.controls.learningEnabled = Boolean(active);
+    state.environment.learningActive = Boolean(active);
   }
   if (controlKey === "robotEnabled") {
     state.controls.robotEnabled = Boolean(active);
@@ -615,10 +624,10 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   }
 
   const fatigueMultiplier = calculateFatigueMultiplier(team, state.controls);
-  const rainMultiplier = calculateRainMultiplier(trade, state.environment);
+  const learningMultiplier = calculateLearningMultiplier(team, state.controls, state.environment);
   const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
   const phaseMultiplier = calculatePhaseMultiplier(state);
-  const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier * phaseMultiplier;
+  const totalMultiplier = fatigueMultiplier * learningMultiplier * robotMultiplier * phaseMultiplier;
   let appliedMultiplier = totalMultiplier;
   let variabilityMultiplier;
   let work;
@@ -649,7 +658,7 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   team.lastTapTick = state.tick;
   team.variabilityMultiplier = variabilityMultiplier;
   team.fatigueMultiplier = round(fatigueMultiplier);
-  team.rainMultiplier = round(rainMultiplier);
+  team.learningMultiplier = round(learningMultiplier);
   team.robotMultiplier = round(robotMultiplier);
   team.productivityMultiplier = source === "auto"
     ? round(variabilityMultiplier)
