@@ -688,12 +688,12 @@
     }
 
     function getActualDisplayEndTick(task, state) {
-      const actualStart = Number.isFinite(task?.startTick) && task.startTick > 0 ? task.startTick : null;
+      const actualStart = Number.isFinite(task?.startTick) && task.startTick >= 0 ? task.startTick : null;
       if (actualStart === null) {
         return null;
       }
 
-      if (Number.isFinite(task.finishTick) && task.finishTick > 0) {
+      if (Number.isFinite(task.finishTick) && task.finishTick >= 0) {
         return task.finishTick;
       }
       return Math.max(state.tick, actualStart);
@@ -707,7 +707,7 @@
       chart.data.labels = tasks.map((task) => `F${task.floor} ${task.tradeName}`);
       chart.data.datasets[0].data = tasks.map((task) => [task.plannedStartTick, task.plannedFinishTick]);
       chart.data.datasets[1].data = tasks.map((task) => {
-        const actualStart = Number.isFinite(task.startTick) && task.startTick > 0 ? task.startTick : null;
+        const actualStart = Number.isFinite(task.startTick) && task.startTick >= 0 ? task.startTick : null;
         const actualFinish = getActualDisplayEndTick(task, state);
         if (actualStart === null) {
           return null;
@@ -813,7 +813,7 @@
             x: task.plannedFinishTick,
             y: floor
           });
-          const finishTick = Number.isFinite(task.finishTick) && task.finishTick > 0 ? task.finishTick : null;
+          const finishTick = Number.isFinite(task.finishTick) && task.finishTick >= 0 ? task.finishTick : null;
 
           if (finishTick !== null) {
             actualFinishPoints.push({
@@ -855,7 +855,7 @@
       TRADES.forEach((trade, tradeIndex) => {
         for (let floor = 1; floor <= FLOORS; floor += 1) {
           const task = state.tasks[`${trade.id}-F${floor}`];
-          if (!task || task.startTick === null || task.startTick <= 0) {
+          if (!task || task.startTick === null || task.startTick < 0) {
             continue;
           }
 
