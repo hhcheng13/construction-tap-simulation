@@ -46,6 +46,11 @@ function getPlannedWorkPerTick(task) {
   return task.required / getPlannedDurationTicks(task);
 }
 
+function getPlannedProjectDurationTicks(state) {
+  const tasks = Object.values(state?.tasks || {});
+  return Math.max(1, ...tasks.map((task) => task.plannedFinishTick || 0));
+}
+
 function getPlannedDuration(trade, floor) {
   const floorIndex = Math.max(0, floor - 1);
   const learningFactor = FLOOR_LEARNING_REDUCTION[floorIndex] ?? FLOOR_LEARNING_REDUCTION.at(-1) ?? 0.8;
@@ -224,9 +229,7 @@ function calculateRobotMultiplier(trade, environment) {
   if (!environment?.robotAssistanceActive || !trade?.robotBoost) {
     return 1;
   }
-  const simTime = Number(environment?.simTime) || 30;
-  const timeFactor = 30 / Math.max(1, simTime);
-  return round(ROBOT_MULTIPLIER * timeFactor);
+  return ROBOT_MULTIPLIER;
 }
 
 function getProgressPct(task) {
@@ -571,9 +574,13 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress should trail the planned baseline by only 0% to 10%.
-    variabilityMultiplier = round(0.9 + Math.random() * 0.1);
-    work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
+    // Global simTime means "project reaches 100% in about simTime seconds" when nobody taps.
+    // Auto variability can be 6% faster to 12% slower than the baseline duration.
+    const simTime = Math.max(1, Number(state.controls?.simTime || state.environment?.simTime || 30));
+    const plannedProjectTicks = getPlannedProjectDurationTicks(state);
+    const globalTimeScale = plannedProjectTicks / simTime;
+    variabilityMultiplier = round(0.94 + Math.random() * 0.18);
+    work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * globalTimeScale * variabilityMultiplier);
   } else {
     const varianceRange = [0.9, 1.18];
     const calculated = calculateWorkAmount(
