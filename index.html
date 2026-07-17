@@ -266,6 +266,11 @@
     let latestState = null;
     let transactionPending = false;
     let feedbackTimer = null;
+    const tapLabels = ["WORK", "FEED PIZZA", "OT", "PAY MORE", "PUSH", "GO GO", "BOOST"];
+
+    function getRandomTapLabel() {
+      return tapLabels[Math.floor(Math.random() * tapLabels.length)];
+    }
 
     function setFeedback(message, isError = false) {
       feedbackEl.textContent = message;
@@ -335,6 +340,9 @@
 
       tapButton.disabled = isWorkDisabled(snapshot, latestState);
       tapButton.classList.toggle("busy", transactionPending);
+      if (!transactionPending) {
+        tapButton.textContent = getRandomTapLabel();
+      }
     }
 
     onValue(gameRef, (snapshot) => {
@@ -367,7 +375,7 @@
       transactionPending = true;
       tapButton.disabled = true;
       tapButton.classList.add("busy");
-      tapButton.textContent = "WORKING...";
+      tapButton.textContent = `${getRandomTapLabel()}...`;
 
       try {
         const result = await runTransaction(gameRef, (state) => {
@@ -392,7 +400,6 @@
         setFeedback("Tap failed to save.", true);
       } finally {
         transactionPending = false;
-        tapButton.textContent = "WORK";
         renderState(latestState);
       }
     });

@@ -23,7 +23,7 @@ const ROBOT_MULTIPLIER = 1.5;
 export const AUTO_PROGRESS_INTERVAL_MS = 1000;
 const AUTO_PROGRESS_RATIO = 1;
 const TAP_PROGRESS_RATIO = 0.052;
-const DEFAULT_PLANNED_PRODUCTIVITY_FACTOR = 2.35;
+const DEFAULT_PLANNED_PRODUCTIVITY_FACTOR = 10;
 const FLOOR_LEARNING_REDUCTION = [1, 0.94, 0.88, 0.84, 0.8];
 
 function clamp(value, min, max) {
@@ -48,7 +48,7 @@ function getPlannedWorkPerTick(task) {
 
 function getPlannedProductivityFactor(source) {
   const value = Number(source?.controls?.plannedProductivityFactor ?? source?.plannedProductivityFactor);
-  return clamp(Number.isFinite(value) ? value : DEFAULT_PLANNED_PRODUCTIVITY_FACTOR, 0.2, 20);
+  return clamp(Number.isFinite(value) ? value : DEFAULT_PLANNED_PRODUCTIVITY_FACTOR, 0.2, 500);
 }
 
 function getPlannedDuration(trade, floor, productivityFactor = DEFAULT_PLANNED_PRODUCTIVITY_FACTOR) {
@@ -256,6 +256,10 @@ function calculatePhaseMultiplier(state) {
 
 export function getCompletedTasksCount(state) {
   return Object.values(state?.tasks || {}).filter((task) => task.done >= task.required).length;
+}
+
+function isProjectComplete(state) {
+  return getCompletedTasksCount(state) >= TRADES.length * FLOORS;
 }
 
 export function getActiveFloor(state) {
@@ -517,7 +521,13 @@ export function updateStatuses(state) {
     team.status = summarizeTeamStatus(state, trade.team, candidate);
   });
 
-  state.uiMessage = state.running ? "Simulation running" : state.tick > 0 ? "Simulation paused" : "Waiting for lecturer";
+  state.uiMessage = isProjectComplete(state)
+    ? "Simulation complete"
+    : state.running
+      ? "Simulation running"
+      : state.tick > 0
+        ? "Simulation paused"
+        : "Waiting for lecturer";
 }
 
 export function applyControlToggle(rawState, controlKey, active) {
@@ -544,7 +554,7 @@ export function setPlannedProductivityFactor(rawState, factor) {
   state.controls.plannedProductivityFactor = clamp(
     Math.round((Number(factor) || DEFAULT_PLANNED_PRODUCTIVITY_FACTOR) * 100) / 100,
     0.2,
-    20
+    500
   );
   reapplyPlannedWindows(state);
   appendEvent(state, "control", `planned productivity factor set to ${state.controls.plannedProductivityFactor}`);
@@ -596,11 +606,11 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   let work;
 
   if (source === "auto") {
-    // Auto progress varies around the planned baseline, from about 6% faster to 12% slower.
-    variabilityMultiplier = round(0.89 + Math.random() * 0.17);
+    // Auto progress varies symmetrically around the planned baseline by +/-15%.
+    variabilityMultiplier = round(0.85 + Math.random() * 0.3);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
-    const varianceRange = [0.9, 1.18];
+    const varianceRange = [0.85, 1.15];
     const calculated = calculateWorkAmount(
       candidate,
       baseRatio,
@@ -678,6 +688,11 @@ export function applyTap(rawState, teamNumber) {
   team.validTaps += 1;
   applyWorkToTask(state, teamNumber, "tap", TAP_PROGRESS_RATIO);
 
+  if (isProjectComplete(state)) {
+    state.running = false;
+    appendEvent(state, "control", "Simulation completed");
+  }
+
   updateStatuses(state);
   appendHistory(state);
   return state;
@@ -685,7 +700,12 @@ export function applyTap(rawState, teamNumber) {
 
 export function applyAutoProgress(rawState, now = Date.now()) {
   const state = sanitizeState(rawState);
-  if (!state.running) {
+  if (!state.running || isProjectComplete(state)) {
+    if (isProjectComplete(state) && state.running) {
+      state.running = false;
+      updateStatuses(state);
+      appendHistory(state);
+    }
     return state;
   }
 
@@ -697,6 +717,12 @@ export function applyAutoProgress(rawState, now = Date.now()) {
   }
 
   for (let step = 0; step < steps; step += 1) {
+    if (isProjectComplete(state)) {
+      state.running = false;
+      appendEvent(state, "control", "Simulation completed");
+      break;
+    }
+
     state.tick += 1;
     updateStatuses(state);
     TRADES.forEach((trade) => {
@@ -707,6 +733,12 @@ export function applyAutoProgress(rawState, now = Date.now()) {
 
       applyWorkToTask(state, trade.team, "auto", AUTO_PROGRESS_RATIO, { incrementTick: false });
     });
+
+    if (isProjectComplete(state)) {
+      state.running = false;
+      appendEvent(state, "control", "Simulation completed");
+      break;
+    }
   }
 
   state.lastAutoProgressAt = lastAutoProgressAt + steps * AUTO_PROGRESS_INTERVAL_MS;
