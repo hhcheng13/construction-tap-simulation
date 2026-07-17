@@ -602,6 +602,7 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   const robotMultiplier = calculateRobotMultiplier(trade, state.environment);
   const phaseMultiplier = calculatePhaseMultiplier(state);
   const totalMultiplier = fatigueMultiplier * rainMultiplier * robotMultiplier * phaseMultiplier;
+  let appliedMultiplier = totalMultiplier;
   let variabilityMultiplier;
   let work;
 
@@ -610,11 +611,13 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
     variabilityMultiplier = round(0.85 + Math.random() * 0.4);
     work = round(getPlannedWorkPerTick(candidate) * AUTO_PROGRESS_RATIO * variabilityMultiplier);
   } else {
-    const varianceRange = [0.85, 1.25];
+    // Manual taps should never feel worse than doing nothing, so clamp to a non-negative boost.
+    appliedMultiplier = Math.max(1, robotMultiplier);
+    const varianceRange = [1, 1.25];
     const calculated = calculateWorkAmount(
       candidate,
       baseRatio,
-      totalMultiplier,
+      appliedMultiplier,
       varianceRange[0],
       varianceRange[1]
     );
@@ -633,7 +636,7 @@ function applyWorkToTask(state, teamNumber, source, baseRatio, options = {}) {
   team.robotMultiplier = round(robotMultiplier);
   team.productivityMultiplier = source === "auto"
     ? round(variabilityMultiplier)
-    : round(totalMultiplier * variabilityMultiplier);
+    : round(appliedMultiplier * variabilityMultiplier);
   team.fatigueLevel = round((1 - fatigueMultiplier) * 100);
 
   candidate.done = clamp(round(candidate.done + work), 0, candidate.required);
